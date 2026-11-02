@@ -1,0 +1,28 @@
+# Upstream CCB is its own git clone, pinned by scripts/build.cjs
+/upstream/
+
+# Keys, certificates and device captures
+private/
+*.p12
+*.jks
+*.keystore
+
+# Large binaries and build output
+*.apk
+*.apk.idsig
+build/
+.toolchain/
+.venv/
+/airbridge/dist*/
+test-output/
+/dist/*.zip
+node_modules/
+__pycache__/
+*.pyc
+
+# Tool state
+/.playwright-mcp/
+/.impeccable/
+.taste-skill/
+/.claude/*
+!/.claude/launch.json

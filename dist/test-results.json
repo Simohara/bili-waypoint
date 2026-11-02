@@ -1,0 +1,20 @@
+{
+  "passed": [
+    "URL identity, exact repository regions, hostname validation",
+    "Range integrity, finite throughput, latency/4K thresholds",
+    "Video-count trigger and cooldown",
+    "Real Blob Worker fetch, private metrics channel and unchanged player message protocol",
+    "Manual check also offers three verified alternatives for a healthy current node; no automatic replacement",
+    "Poor node confirms, scans all 16 repository candidates without rewrite collapse, and waits for consent",
+    "Only explicit approval persists the node, reloads, restores position and redirects actual media requests",
+    "SPA/P switch cancels old measurements and drops old proposals",
+    "Third qualified video triggers one automatic small check; settings are editable and persisted",
+    "HTTP 200 error pages across all nodes cannot produce a winning replacement",
+    "When only two alternatives are usable, exactly those two are selectable; failed nodes are excluded",
+    "Transient waits, pause, seeking, buffered stalled events and hidden pages do not trigger probes",
+    "A sustained 2.5-second stall bypasses view-count and periodic cooldown, offering three nodes without auto-refresh",
+    "One stall episode does not loop; repeat episodes respect the emergency cooldown",
+    "Disabling stall detection prevents emergency probes"
+  ],
+  "note": "Deterministic Chrome fixture, not a signed-in Bilibili/Tampermonkey session"
+}

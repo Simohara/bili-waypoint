@@ -1,0 +1,10 @@
+{
+  "upstreamCommit": "2534fd087338047a5938d12c9fe0448b4a9b2bf7",
+  "upstreamSha256": "7f45705f0ca079777fc87668b2b6c29f0a66f33be8bf007806796fc3e1aa7057",
+  "snapshotAt": "2026-10-17T22:01:33Z",
+  "allowedRegions": [
+    "香港",
+    "海外"
+  ],
+  "scriptSha256": "2b4df987759f39801b91edead2a147f99af08ee8d3237ae0d9c4d28a97880f7d"
+}

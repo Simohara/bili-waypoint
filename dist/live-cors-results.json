@@ -1,0 +1,39 @@
+{
+  "apiCode": 0,
+  "samples": [
+    {
+      "host": "upos-sz-mirrorcosov.bilivideo.com",
+      "requested": 1,
+      "status": 206,
+      "received": 1,
+      "range": "bytes 0-0/128856535",
+      "ms": 67
+    },
+    {
+      "host": "upos-sz-mirrorcosov.bilivideo.com",
+      "requested": 524288,
+      "status": 206,
+      "received": 524288,
+      "range": "bytes 0-524287/128856535",
+      "ms": 49
+    },
+    {
+      "host": "cn-hk-eq-01-01.bilivideo.com",
+      "requested": 1,
+      "status": 206,
+      "received": 1,
+      "range": "bytes 0-0/128856535",
+      "ms": 290
+    },
+    {
+      "host": "cn-hk-eq-01-01.bilivideo.com",
+      "requested": 524288,
+      "status": 206,
+      "received": 524288,
+      "range": "bytes 0-524287/128856535",
+      "ms": 403
+    }
+  ],
+  "note": "Fresh anonymous Chrome context at real Bilibili origin. Single samples; no ranking claim.",
+  "networkErrors": []
+}
