@@ -2,7 +2,9 @@
 function installCcbAutoTelemetry(scope, emit) {
     if (scope.__CCB_AUTO_METRICS__) return;
     scope.__CCB_AUTO_METRICS__ = true;
-    const media = value => { try { return /(?:^|\.)(?:bilivideo\.(?:com|cn)|acgvideo\.(?:com|cn)|akamaized\.net)$/.test(new URL(value).hostname); } catch (_) { return false; } };
+    // Taken now: a Worker script may declare its own global URL.
+    const NativeURL = scope.URL;
+    const media = value => { try { return /(?:^|\.)(?:bilivideo\.(?:com|cn)|acgvideo\.(?:com|cn)|akamaized\.net)$/.test(new NativeURL(value).hostname); } catch (_) { return false; } };
     const now = () => scope.performance.now();
     const publish = (url, start, bytes, ping, final, status) => {
         try { emit({url, duration: now() - start, bytes, ping, final, status, at: Date.now()}); } catch (_) {}
@@ -10,7 +12,9 @@ function installCcbAutoTelemetry(scope, emit) {
     const BaseXHR = scope.XMLHttpRequest;
     if (BaseXHR) {
         scope.XMLHttpRequest = class extends BaseXHR {
-            open(method, url, ...rest) {
+            // Keep the argument count, so open(method) still throws like the native method.
+            open(...args) {
+                const url = args[1];
                 this.__ccbMetricUrl = typeof url === 'string' && media(url) ? url : '';
                 this.__ccbMetricStart = null;
                 if (!this.__ccbMetricBound) {
@@ -31,7 +35,7 @@ function installCcbAutoTelemetry(scope, emit) {
                             this.__ccbMetricStart, this.__ccbMetricBytes, this.__ccbMetricPing, true, this.status);
                     });
                 }
-                return super.open(method, url, ...rest);
+                return super.open(...args);
             }
             send(...args) {
                 this.__ccbMetricStart = this.__ccbMetricUrl ? now() : null;
@@ -43,6 +47,7 @@ function installCcbAutoTelemetry(scope, emit) {
     const baseFetch = scope.fetch;
     if (baseFetch && scope.ReadableStream && scope.Response) {
         scope.fetch = async function (input, init) {
+            if (!arguments.length) return baseFetch.call(scope); // rejects natively instead of fetching "undefined"
             const url = typeof input === 'string' ? input : (input && input.url) || '';
             if (!media(url)) return baseFetch.call(scope, input, init);
             const start = now(), response = await baseFetch.call(scope, input, init), ping = now() - start;

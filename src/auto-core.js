@@ -29,7 +29,8 @@ function createCcbAutoCore() {
     }
     function identity(url) {
         try {
-            const u = new URL(url), match = /^\/video\/(BV[a-zA-Z0-9]{10})\/?$/.exec(u.pathname);
+            // Overseas visitors are redirected to a locale prefix such as /zh-Hans/video/.
+            const u = new URL(url), match = /^\/(?:[a-z]{2}(?:-[A-Za-z]+)?\/)?video\/(BV[a-zA-Z0-9]{10})\/?$/.exec(u.pathname);
             if (u.hostname !== 'www.bilibili.com' || !match) return null;
             const rawPage = u.searchParams.get('p') || '1';
             const page = /^\d+$/.test(rawPage) ? Number(rawPage) : 1;
@@ -42,10 +43,12 @@ function createCcbAutoCore() {
     }
     function threshold(data, floor) {
         const dash = data && data.dash;
-        const tracks = (dash && dash.video || []).filter(t => t.id === 120 || t.width >= 3840 || t.height >= 2160);
-        const video = Math.max(0, ...tracks.map(t => Number(t.bandwidth) || 0));
+        const videos = dash && dash.video || [], tracks = videos.filter(t => t.id === 120 || t.width >= 3840 || t.height >= 2160);
+        const video = Math.max(0, ...(tracks.length ? tracks : videos).map(t => Number(t.bandwidth) || 0));
         const audio = Math.max(0, ...(dash && dash.audio || []).map(t => Number(t.bandwidth) || 0));
-        return Math.max(floor, (video + (video ? audio : 0)) * 1.3 / 1e6);
+        const need = (video + (video ? audio : 0)) * 1.3 / 1e6;
+        // Without a 4K track the target only caps what the best returned track needs.
+        return tracks.length || !need ? Math.max(floor, need) : Math.min(floor, need);
     }
     function healthy(result, config, requiredMbps) {
         return !!result && !result.error && Number.isFinite(result.pingMs) && Number.isFinite(result.mbps)
@@ -56,7 +59,7 @@ function createCcbAutoCore() {
         const output = [];
         if (result.error) output.push(result.error);
         if (Number.isFinite(result.pingMs) && result.pingMs > config.maxPingMs) output.push(`HTTP 延迟 ${Math.round(result.pingMs)} ms > ${config.maxPingMs} ms`);
-        if (Number.isFinite(result.mbps) && result.mbps < requiredMbps) output.push(`速度 ${result.mbps.toFixed(1)} Mbps < 4K 目标 ${requiredMbps.toFixed(1)} Mbps`);
+        if (Number.isFinite(result.mbps) && result.mbps < requiredMbps) output.push(`速度 ${result.mbps.toFixed(1)} Mbps < 目标 ${requiredMbps.toFixed(1)} Mbps`);
         return output;
     }
     function validateRange({status, range, size, expected, type, sample, finalUrl, expectedHost}) {
@@ -67,10 +70,14 @@ function createCcbAutoCore() {
         if (/html|json|xml|text\//i.test(type || '')) throw new Error('节点返回了错误页');
         if (sample && /^\s*(?:<!doctype|<html|<\?xml|\{\s*"(?:code|error)")/i.test(sample)) throw new Error('节点返回了错误内容');
     }
+    // A stored timestamp from the future (system clock moved back) counts as "never".
+    const since = (at, now) => at > now ? now : now - (at || 0);
     function due(session, config, now) {
-        if (!config.enabled || now - (session.lastCheckAt || 0) < config.cooldownMinutes * 60000) return false;
+        const cooldown = config.cooldownMinutes * 60000;
+        // A scan that found nothing postpones periodic checks to three cooldowns.
+        if (!config.enabled || since(session.lastCheckAt, now) < cooldown || since(session.missAt, now) < 3 * cooldown) return false;
         return session.views - (session.lastCheckViews || 0) >= config.everyVideos;
     }
-    return {defaults, settings, host, nodes, identity, median, threshold, healthy, reasons, validateRange, due};
+    return {defaults, settings, host, nodes, identity, median, threshold, healthy, reasons, validateRange, since, due};
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = createCcbAutoCore();

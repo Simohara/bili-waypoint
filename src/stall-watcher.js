@@ -48,5 +48,5 @@ function createCcbStallWatcher(options) {
         poll();
     }
     function dispose() { reset(); if (listeners) listeners.abort(); video = null; context = ''; }
-    return {update, reset, dispose};
+    return {update, reset, dispose, ahead: () => video ? ahead() : 0};
 }
