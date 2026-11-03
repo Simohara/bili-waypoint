@@ -33,5 +33,6 @@ __pycache__/
 /diagnostics.html
 /dist/android/
 /dist/LICENSE
-/android-external/design/
 /analysis/
+/android-external/
+/dist/android-external/
