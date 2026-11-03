@@ -73,7 +73,7 @@
 
 ### 安装
 
-1. 在 [Releases](../../releases/latest) 下载 `qingzhou-0.5.0.apk`（仓库里也有一份：[`dist/qingzhou/`](dist/qingzhou/)），在手机上打开安装，按提示允许“安装未知来源应用”。
+1. 在 [Releases](https://github.com/Simohara/bili-waypoint/releases/tag/qingzhou-v0.5.0) 下载 `qingzhou-0.5.0.apk`（仓库里也有一份：[`dist/qingzhou/`](dist/qingzhou/)），在手机上打开安装，按提示允许“安装未知来源应用”。
 2. 需要 Android 8.0 及以上（arm64 或 x86_64），手机上要装着原版哔哩哔哩。
 3. 从“映途”或更早的 CCB 外置版升级时直接覆盖安装，包名和签名都没变；装好后重新点“启动接管”。
 
