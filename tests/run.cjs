@@ -4,9 +4,9 @@ const path = require('node:path');
 const C = require('../src/auto-core.js');
 const {chromium} = require('C:/Users/simoh/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = path.resolve(__dirname, '..');
-const script = fs.readFileSync(path.join(root, 'dist/ccb-auto.user.js'), 'utf8');
+const script = fs.readFileSync(path.join(root, 'dist/yicheng.user.js'), 'utf8');
 const fixture = fs.readFileSync(path.join(__dirname, 'fixture.html'), 'utf8');
-const pool = C.nodes(JSON.parse(fs.readFileSync(path.join(root, 'upstream/data/cdn.json'), 'utf8')));
+const pool = C.nodes(JSON.parse(fs.readFileSync(path.join(root, 'data/cdn.json'), 'utf8')));
 const BV = 'BV175ph6CERk', CID = 42604365439;
 const currentHost = 'upos-sz-mirrorcosov.bilivideo.com';
 const mcdnHost = 'xy60x29x235x164xy.mcdn.bilivideo.cn';
@@ -132,7 +132,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         if (url.hostname === 'www.bilibili.com' && url.pathname === '/static/d.txt') return route.fulfill({contentType: 'text/plain', body: 'D'});
         if (url.hostname === 'www.bilibili.com' && url.pathname === '/static/m.js') return route.fulfill({contentType: 'application/javascript', body: 'let first;self.addEventListener("message",e=>{first??=e.data;postMessage(first)})'});
         if (url.hostname === 'raw.githubusercontent.com' && extra.repoDown) return route.abort();
-        if (url.hostname === 'raw.githubusercontent.com') return route.fulfill({headers, contentType: 'application/json', body: fs.readFileSync(path.join(root, 'upstream/data/' + (url.pathname.endsWith('region.json') ? 'region.json' : 'cdn.json')), 'utf8')});
+        if (url.hostname === 'raw.githubusercontent.com') return route.fulfill({headers, contentType: 'application/json', body: fs.readFileSync(path.join(root, 'data/' + (url.pathname.endsWith('region.json') ? 'region.json' : 'cdn.json')), 'utf8')});
         if (url.pathname === '/x/player/pagelist' && extra.failPagelist) return route.fulfill({headers, contentType: 'application/json', body: JSON.stringify({code: -352, data: null})});
         if (url.pathname === '/x/player/pagelist') return route.fulfill({headers, contentType: 'application/json', body: JSON.stringify({code: 0, data: [{page: 1, cid: CID}, {page: 2, cid: CID + 1}]})});
         if (url.pathname === '/x/player/playurl') {
@@ -177,7 +177,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
             const r = await fetch('https://' + host + asset, {headers: {Range: 'bytes=0-262143'}}); await r.arrayBuffer();
         }, {host: currentHost, asset});
         await healthy.page.waitForTimeout(1100);
-        const badge = healthy.page.getByRole('button', {name: 'CCB 视频网络状态与设置'});
+        const badge = healthy.page.getByRole('button', {name: '驿程：视频网络状态与设置'});
         assert.match(await badge.getAttribute('title'), /分段加载/);
         await healthy.page.screenshot({path: path.join(root, 'dist/preview-compact.png'), clip: {x: 72, y: 12, width: 780, height: 115}});
         const beforeWorker = healthy.requests.length;
@@ -209,7 +209,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await healthy.context.close();
 
         const poor = await setup(browser);
-        await poor.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await poor.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await poor.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await poor.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         const tested = new Set(poor.requests.filter(r => r.range === 'bytes=0-262143').map(r => r.host));
@@ -221,7 +221,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const selectedHost = await choices.nth(2).inputValue();
         await choices.nth(2).check();
         await poor.page.getByRole('button', {name: '收起', exact: true}).click();
-        await poor.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await poor.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         assert.equal(await poor.page.getByRole('radio').nth(2).isChecked(), true);
         await poor.page.screenshot({path: path.join(root, 'dist/preview-dark.png')});
         pass('Poor node confirms, scans all 16 repository candidates without rewrite collapse, and waits for consent');
@@ -239,13 +239,13 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await poor.context.close();
 
         const stale = await setup(browser);
-        await stale.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await stale.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await stale.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await stale.page.waitForTimeout(250);
         await stale.page.evaluate(() => history.pushState({}, '', '?p=2'));
         await stale.page.waitForTimeout(1800);
         assert.equal(await stale.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
-        await stale.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await stale.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         assert.equal(await stale.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).count(), 0);
         assert.deepEqual(stale.errors, []);
         pass('SPA/P switch cancels old measurements and drops old proposals');
@@ -253,7 +253,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
 
         const counting = await setup(browser, 'healthy', {gm: {CCB_AUTO_settings_v1: {watchedSeconds: 5, everyVideos: 3}},
             session: {views: 2, lastCheckViews: 0, lastCheckAt: Date.now() - 20 * 60000, lastCountedBvid: 'BV13aH46QEZ6'}});
-        await counting.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await counting.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await counting.page.getByText('节点正常', {exact: true}).waitFor({timeout: 20000});
         const counters = await counting.page.evaluate(() => JSON.parse(sessionStorage.getItem('CCB_AUTO_session_v1')));
         assert.equal(counters.views, 3); assert.equal(counters.lastCheckViews, 3);
@@ -272,7 +272,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await counting.context.close();
 
         const invalid = await setup(browser, 'healthy', {invalid: true});
-        await invalid.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await invalid.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await invalid.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await invalid.page.getByText('暂未找到可用的香港／海外节点：HTTP 200 ×15', {exact: true}).waitFor({timeout: 45000});
         assert.equal(await invalid.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).count(), 0);
@@ -283,7 +283,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
 
         const twoHosts = pool.filter(node => node.host !== currentHost).slice(0, 2).map(node => node.host);
         const limited = await setup(browser, 'poor', {usableHosts: twoHosts});
-        await limited.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await limited.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await limited.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await limited.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.equal(await limited.page.getByRole('radio').count(), 2);
@@ -350,7 +350,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await disabled.context.close();
 
         const localized = await setup(browser, 'healthy', {url: 'https://www.bilibili.com/zh-Hans/video/' + BV + '/'});
-        await localized.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await localized.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await localized.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await localized.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.deepEqual(localized.errors, []);
@@ -362,8 +362,8 @@ async function setup(browser, mode = 'poor', extra = {}) {
             const r = await fetch('https://' + host + ':4483/v1/resource/42604365439-video.m4s', {headers: {Range: 'bytes=0-262143'}}); await r.arrayBuffer();
         }, mcdnHost);
         await mcdn.page.waitForTimeout(1100);
-        assert.match(await mcdn.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).getAttribute('title'), /分段加载/);
-        await mcdn.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        assert.match(await mcdn.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).getAttribute('title'), /分段加载/);
+        await mcdn.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await mcdn.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await mcdn.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         const swapped = mcdn.requests.filter(r => r.host !== mcdnHost);
@@ -381,7 +381,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         assert.equal(distant.requests.filter(r => r.range === 'bytes=0-2097151').length, 0);
         assert.ok(distant.requests.every(r => r.host === currentHost));
         pass('H1: a 200 ms TTFB node with ample bandwidth passes the 1 MiB light check without a recheck or scan');
-        await distant.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await distant.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await distant.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await distant.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.equal(new Set(distant.requests.filter(r => r.range === 'bytes=0-2097151').map(r => r.host)).size, 5);
@@ -391,7 +391,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await distant.context.close();
 
         const short = await setup(browser, 'healthy', {size: 1500000});
-        await short.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await short.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await short.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await short.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.ok(short.requests.some(r => r.range === 'bytes=0-1499999'));
@@ -496,7 +496,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
             assert.match(r.fetchNoArgs, /argument/); assert.match(r.fetchNoArgsWorker, /argument/);
             assert.ok(workers.requests.some(q => q.host === 'upos-sz-staticcos-cmask.bilivideo.com' && q.path.startsWith('/cmaskboss/')));
             await workers.page.waitForTimeout(1100);
-            assert.match(await workers.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).getAttribute('title'), /分段加载/);
+            assert.match(await workers.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).getAttribute('title'), /分段加载/);
             assert.deepEqual(workers.errors, []);
             await workers.context.close();
         }
@@ -527,7 +527,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
 
         const cancelling = await setup(browser, 'poor', periodic());
         await firstPing(cancelling.page);
-        await cancelling.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await cancelling.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await cancelling.page.getByRole('button', {name: '取消', exact: true}).click();
         await cancelling.page.waitForTimeout(300);
         const cancelledAt = cancelling.requests.length;
@@ -563,7 +563,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const slowAll = await setup(browser, 'poor', {...periodic(), slowAll: true});
         await slowAll.page.waitForFunction(() => JSON.parse(sessionStorage.getItem('CCB_AUTO_session_v1')).lastCheckViews === 3, null, {timeout: 40000});
         assert.equal(slowAll.requests.filter(r => r.range === 'bytes=0-2097151').length, 6);
-        assert.equal(await slowAll.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).getAttribute('aria-expanded'), 'false');
+        assert.equal(await slowAll.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).getAttribute('aria-expanded'), 'false');
         assert.ok((await stored(slowAll.page)).missAt > 0);
         assert.deepEqual(slowAll.errors, []);
         pass('M6: below half the target only the coarse top five are re-tested with 2 MiB; a periodic miss stays closed and is recorded');
@@ -584,7 +584,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const failing = {gm: {CCB_AUTO_settings_v1: {everyVideos: 30}}, failPagelist: true};
         const retrying = await setup(browser, 'healthy', failing);
         failing.failPagelist = false;
-        await retrying.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await retrying.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await retrying.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await retrying.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.deepEqual(retrying.errors, []);
@@ -668,7 +668,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         }, {bvid: BV, cid: CID});
         resigned.expired = ['1', '2'];
         await resign.page.clock.fastForward(21 * 60000); await resign.page.waitForTimeout(1200);
-        await resign.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await resign.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await resign.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await resign.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.deepEqual(resign.errors, []);
@@ -683,7 +683,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await cached.page.waitForFunction(() => JSON.parse(sessionStorage.getItem('CCB_AUTO_session_v1') || '{}').views === 2, null, {timeout: 15000});
         await cached.page.goBack({waitUntil: 'commit'}); await cached.page.waitForTimeout(1500);
         assert.equal(await cached.page.evaluate(() => window.__fromCache), true);
-        await cached.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await cached.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await cached.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await cached.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.equal((await cached.page.evaluate(() => JSON.parse(sessionStorage.getItem('CCB_AUTO_session_v1')))).views, 2);
@@ -705,7 +705,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await tabs.context.close();
 
         const denied = await setup(browser, 'healthy', {usableHosts: []});
-        await denied.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await denied.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await denied.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await denied.page.getByText('暂未找到可用的香港／海外节点：HTTP 403 ×15', {exact: true}).waitFor({timeout: 45000});
         assert.deepEqual(denied.errors, []);
@@ -717,7 +717,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
             const r = await fetch('https://' + host + asset, {headers: {Range: 'bytes=0-4095'}}); await r.arrayBuffer();
         }, {host: currentHost, asset});
         await tiny.page.waitForTimeout(1100);
-        assert.doesNotMatch(await tiny.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).getAttribute('title'), /分段加载/);
+        assert.doesNotMatch(await tiny.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).getAttribute('title'), /分段加载/);
         assert.deepEqual(tiny.errors, []);
         pass('L4: a few-KB index request is not shown as the live loading speed');
         await tiny.context.close();
@@ -727,13 +727,13 @@ async function setup(browser, mode = 'poor', extra = {}) {
             for (let i = 0; i < 3; i++) { const r = await fetch('https://' + host + asset, {headers: {Range: 'bytes=0-163839'}}); await r.arrayBuffer(); }
         }, {host: currentHost, asset});
         await small.page.waitForTimeout(1100);
-        assert.match(await small.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).getAttribute('title'), /分段加载/);
+        assert.match(await small.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).getAttribute('title'), /分段加载/);
         assert.deepEqual(small.errors, []);
         pass('L4: short auto-quality segments (160 KiB each) pool into a live reading');
         await small.context.close();
 
         const lowTarget = await setup(browser, 'healthy', {hd: true, pace: {'*': 30, [currentHost]: 4}});
-        await lowTarget.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await lowTarget.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await lowTarget.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await lowTarget.page.getByText('暂未找到可用的香港／海外节点：速度不足 ×15', {exact: true}).waitFor({timeout: 45000});
         assert.equal(await lowTarget.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).count(), 0);
@@ -742,7 +742,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await lowTarget.context.close();
 
         const away = await setup(browser, 'poor', {...quietStall, clock: true});
-        await away.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await away.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await away.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await firstPing(away.page);
         await away.page.evaluate(() => { window.__fromCache = true; });
@@ -767,7 +767,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await tracksApart.page.evaluate(async host => {
             const r = await fetch('https://' + host + ':4483/v1/resource/42604365439-hd.m4s', {headers: {Range: 'bytes=0-262143'}}); await r.arrayBuffer();
         }, mcdnHost);
-        await tracksApart.page.getByRole('button', {name: 'CCB 视频网络状态与设置'}).click();
+        await tracksApart.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await tracksApart.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await tracksApart.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.ok(tracksApart.requests.some(r => r.host === mcdnHost && r.port === '4483' && r.range === 'bytes=0-0'));

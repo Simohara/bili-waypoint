@@ -1,4 +1,5 @@
 {
+  "forkedFrom": "Kanda-Akihito-kun/ccb 2.1.0",
   "upstreamCommit": "2534fd087338047a5938d12c9fe0448b4a9b2bf7",
   "upstreamSha256": "7f45705f0ca079777fc87668b2b6c29f0a66f33be8bf007806796fc3e1aa7057",
   "snapshotAt": "2026-10-17T22:01:33Z",
@@ -6,5 +7,5 @@
     "香港",
     "海外"
   ],
-  "scriptSha256": "b5aa2b29399f11148d88bc9510906a53bfe6bc7d6db54c67fbc26b5b511dfeab"
+  "scriptSha256": "83bb9368aba63ec8ea2b1d1d3afab5a4bf7d7310639b40402fce9ce35e94c302"
 }

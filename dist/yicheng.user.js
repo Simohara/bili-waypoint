@@ -1,13 +1,13 @@
 // ==UserScript==
-// @name         CCB Auto - 香港海外节点优选与网络状态
+// @name         驿程 - B 站香港／海外节点优选
 // @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态
-// @namespace    CCB-Auto
+// @namespace    bili-waypoint
 // @license      MIT
-// @version      2.2.0-auto.4
-// @author       鼠鼠今天吃嘉然
+// @version      2.3.0
+// @author       Simohara
 // @run-at       document-start
-// @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js
-// @updateURL    https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js
+// @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js
+// @updateURL    https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js
 // @match        https://www.bilibili.com/video/*
 // @match        https://www.bilibili.com/*/video/*
 // @match        https://www.bilibili.com/bangumi/play/*
@@ -748,7 +748,7 @@ function createCcbAuto(env) {
         shadow = hostElement.attachShadow({mode: 'open'});
         const style = element('style'); style.textContent = env.css;
         badge = button('', () => { open = !open; render(); }, 'cap'); badge.innerHTML = CAP;
-        badge.setAttribute('aria-label', 'CCB 视频网络状态与设置'); badge.setAttribute('aria-expanded', 'false');
+        badge.setAttribute('aria-label', '驿程：视频网络状态与设置'); badge.setAttribute('aria-expanded', 'false');
         panel = element('section', undefined, 'panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', '驿程');
         panel.hidden = true; panel.innerHTML = PANEL;
         const $ = selector => panel.querySelector(selector), [keep, scan, cfg] = $('.ft').children;
@@ -1061,7 +1061,7 @@ function createCcbAuto(env) {
     window.addEventListener('pageshow', e => { if (e.persisted) Object.assign(session, safeRead(SKEY, {})); });
     window.addEventListener('pagehide', () => { stallWatcher.dispose(); if (running) running.abort(); if (state && state.metaAbort) state.metaAbort.abort(); });
     syncContext(); setInterval(tick, 1000);
-    env.registerMenu('🌐 CCB 自动优选与网络状态', () => { open = true; render(); });
+    env.registerMenu('🌐 驿程：节点优选与网络状态', () => { open = true; render(); });
     return {observePlayInfo, ingestMetric,
         isVideoContext: () => !!C.identity(location.href),
         clearOverride: () => { try { sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {} },

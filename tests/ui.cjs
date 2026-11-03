@@ -5,7 +5,7 @@ const path = require('node:path');
 const C = require('../src/auto-core.js');
 const {chromium} = require('C:/Users/simoh/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = path.resolve(__dirname, '..'), shots = path.join(root, 'design/widget-concepts');
-const script = fs.readFileSync(path.join(root, 'dist/ccb-auto.user.js'), 'utf8');
+const script = fs.readFileSync(path.join(root, 'dist/yicheng.user.js'), 'utf8');
 const fixture = fs.readFileSync(path.join(__dirname, 'fixture.html'), 'utf8');
 const gsapUrl = /@require\s+(\S+gsap\S+)/.exec(script)[1];
 const BV = 'BV175ph6CERk', CID = 42604365439, currentHost = 'upos-sz-mirrorcosov.bilivideo.com';
@@ -24,7 +24,7 @@ async function setup(browser, gsapSource, {theme = 'dark', reduce = false} = {})
         window.unsafeWindow = window; window.__gm = {CCB_main: host};
         window.GM_getValue = (k, d) => Object.hasOwn(window.__gm, k) ? window.__gm[k] : d;
         window.GM_setValue = (k, v) => { window.__gm[k] = v; };
-        window.GM_registerMenuCommand = (name, fn) => { if (name.includes('CCB 自动优选')) window.__menu = fn; };
+        window.GM_registerMenuCommand = (name, fn) => { if (name.includes('驿程')) window.__menu = fn; };
         window.GM_xmlhttpRequest = options => {
             const controller = new AbortController();
             fetch(options.url, {signal: controller.signal}).then(async r => options.onload({status: r.status, responseText: await r.text()})).catch(() => options.onerror?.());
@@ -61,7 +61,7 @@ async function setup(browser, gsapSource, {theme = 'dark', reduce = false} = {})
         if (/^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) return route.continue();
         if (req.method() === 'OPTIONS') return route.fulfill({status: 204, headers});
         if (url.hostname === 'www.bilibili.com' && url.pathname.startsWith('/video/')) return route.fulfill({contentType: 'text/html', body: fixture});
-        if (url.hostname === 'raw.githubusercontent.com') return route.fulfill({headers, contentType: 'application/json', body: fs.readFileSync(path.join(root, 'upstream/data/cdn.json'), 'utf8')});
+        if (url.hostname === 'raw.githubusercontent.com') return route.fulfill({headers, contentType: 'application/json', body: fs.readFileSync(path.join(root, 'data/cdn.json'), 'utf8')});
         if (url.pathname === '/x/player/pagelist') return route.fulfill({headers, contentType: 'application/json', body: JSON.stringify({code: 0, data: [{page: 1, cid: CID}]})});
         if (url.pathname === '/x/player/playurl') return route.fulfill({headers, contentType: 'application/json', body: JSON.stringify({code: 0, data: {timelength: 1200000, dash: {
             // The 4K track keeps the target at 35 Mbps, so the paced current node (~9 Mbps) falls short of it.
@@ -82,7 +82,7 @@ async function setup(browser, gsapSource, {theme = 'dark', reduce = false} = {})
     if (theme === 'light') await page.addStyleTag({content: LIGHT});
     await page.waitForSelector('#ccb-auto-widget', {state: 'attached'});
     await page.waitForTimeout(1400);
-    return {context, page, errors, capsule: page.getByRole('button', {name: 'CCB 视频网络状态与设置'})};
+    return {context, page, errors, capsule: page.getByRole('button', {name: '驿程：视频网络状态与设置'})};
 }
 const fonts = page => page.evaluate(async () => {
     await document.fonts.ready;

@@ -1,4 +1,4 @@
-# Upstream CCB is its own git clone, pinned by scripts/build.cjs
+# Old local clone of upstream CCB; vendor/ and data/ replace it
 /upstream/
 
 # Keys, certificates and device captures
@@ -34,6 +34,4 @@ __pycache__/
 /dist/android/
 /dist/LICENSE
 /android-external/design/
-/analysis/*
-!/analysis/android/
-!/analysis/review-2026-11-03/
+/analysis/

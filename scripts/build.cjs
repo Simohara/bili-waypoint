@@ -3,9 +3,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-let source = read('upstream/script/ccb.js');
+// vendor/ccb.js is CCB 2.1.0 (upstream commit 2534fd08) kept here as is; only its node data still comes from upstream (data/).
+let source = read('vendor/ccb.js');
 const upstreamHash = crypto.createHash('sha256').update(source).digest('hex');
-if (upstreamHash !== '7f45705f0ca079777fc87668b2b6c29f0a66f33be8bf007806796fc3e1aa7057') throw new Error('Upstream changed: review integration anchors before rebuilding');
 source = source.replace(/\r\n/g, '\n');
 function replace(before, after) {
     if (source.split(before).length !== 2) throw new Error('Expected exactly one anchor: ' + before.slice(0, 100));
@@ -17,19 +17,20 @@ function replaceBlock(start, end, after) {
     if (from < 0 || source.indexOf(start, from + 1) >= 0 || to < 0 || source.split(end).length !== 2) throw new Error('Expected one block: ' + start.slice(0, 100));
     source = source.slice(0, from) + after + source.slice(to);
 }
-replace('// @name         Custom CDN of Bilibili (CCB) - 修改哔哩哔哩的网页视频、直播、番剧的播放源', '// @name         CCB Auto - 香港海外节点优选与网络状态');
+replace('// @name         Custom CDN of Bilibili (CCB) - 修改哔哩哔哩的网页视频、直播、番剧的播放源', '// @name         驿程 - B 站香港／海外节点优选');
 replace('// @description  Custom CDN of Bilibili (CCB)', '// @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态');
-replace('// @version      2.1.0', '// @version      2.2.0-auto.4');
-replace('// @namespace    CCB', '// @namespace    CCB-Auto');
+replace('// @version      2.1.0', '// @version      2.3.0');
+replace('// @author       鼠鼠今天吃嘉然', '// @author       Simohara');
+replace('// @namespace    CCB', '// @namespace    bili-waypoint');
 // Pasted installs update from the published copy too, not only installs made from the link.
-replace('// @run-at       document-start', '// @run-at       document-start\n// @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js\n// @updateURL    https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js');
+replace('// @run-at       document-start', '// @run-at       document-start\n// @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js\n// @updateURL    https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js');
 replace('// @match        https://www.bilibili.com/video/*', '// @match        https://www.bilibili.com/video/*\n// @match        https://www.bilibili.com/*/video/*');
 replace('// @connect      kanda-akihito-kun.github.io', '// @connect      kanda-akihito-kun.github.io\n// @connect      raw.githubusercontent.com');
 replace('// @grant        GM_xmlhttpRequest', '// @require      https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js\n// @grant        GM_xmlhttpRequest');
 replace("const api = 'https://kanda-akihito-kun.github.io/ccb/api'", "const api = 'https://raw.githubusercontent.com/Kanda-Akihito-Kun/ccb/main/data'");
-const snapshot = JSON.parse(read('upstream/data/cdn.json'));
-const snapshotAt = JSON.parse(read('upstream/data/info.json')).lastSuccessTime;
-const regions = JSON.parse(read('upstream/data/region.json'));
+const snapshot = JSON.parse(read('data/cdn.json'));
+const snapshotAt = JSON.parse(read('data/info.json')).lastSuccessTime;
+const regions = JSON.parse(read('data/region.json'));
 const additions = ['auto-core.js', 'telemetry.js', 'stall-watcher.js', 'worker-base.js', 'auto-runtime.js'].map(file => read('src/' + file)).join('\n\n');
 const early = `
     // Original author: 鼠鼠今天吃嘉然. CCB Auto additions: MIT, 2026.
@@ -195,8 +196,7 @@ replace('                const obj = JSON.parse(response)\n                trans
 replace("            if (response && typeof response === 'object') {\n                transformPlayUrlResponse(response)", "            if (response && typeof response === 'object') {\n                if (autoController) autoController.observePlayInfo(response, u)\n                transformPlayUrlResponse(response)");
 replace("    watchGlobal('__playinfo__', (obj) => {", "    watchGlobal('__playinfo__', (obj) => {\n        if (autoController) autoController.observePlayInfo(obj)");
 const out = path.join(root, 'dist'); fs.mkdirSync(out, {recursive: true});
-fs.writeFileSync(path.join(out, 'ccb-auto.user.js'), source);
-fs.copyFileSync(path.join(root, 'upstream/LICENSE'), path.join(out, 'LICENSE'));
-fs.writeFileSync(path.join(out, 'build-info.json'), JSON.stringify({upstreamCommit: '2534fd087338047a5938d12c9fe0448b4a9b2bf7', upstreamSha256: upstreamHash,
+fs.writeFileSync(path.join(out, 'yicheng.user.js'), source);
+fs.writeFileSync(path.join(out, 'build-info.json'), JSON.stringify({forkedFrom: 'Kanda-Akihito-kun/ccb 2.1.0', upstreamCommit: '2534fd087338047a5938d12c9fe0448b4a9b2bf7', upstreamSha256: upstreamHash,
     snapshotAt, allowedRegions: ['香港', '海外'], scriptSha256: crypto.createHash('sha256').update(source).digest('hex')}, null, 2));
-console.log('Built dist/ccb-auto.user.js (' + Buffer.byteLength(source) + ' bytes)');
+console.log('Built dist/yicheng.user.js (' + Buffer.byteLength(source) + ' bytes)');

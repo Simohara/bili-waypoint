@@ -455,7 +455,7 @@ function createCcbAuto(env) {
         shadow = hostElement.attachShadow({mode: 'open'});
         const style = element('style'); style.textContent = env.css;
         badge = button('', () => { open = !open; render(); }, 'cap'); badge.innerHTML = CAP;
-        badge.setAttribute('aria-label', 'CCB 视频网络状态与设置'); badge.setAttribute('aria-expanded', 'false');
+        badge.setAttribute('aria-label', '驿程：视频网络状态与设置'); badge.setAttribute('aria-expanded', 'false');
         panel = element('section', undefined, 'panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', '驿程');
         panel.hidden = true; panel.innerHTML = PANEL;
         const $ = selector => panel.querySelector(selector), [keep, scan, cfg] = $('.ft').children;
@@ -768,7 +768,7 @@ function createCcbAuto(env) {
     window.addEventListener('pageshow', e => { if (e.persisted) Object.assign(session, safeRead(SKEY, {})); });
     window.addEventListener('pagehide', () => { stallWatcher.dispose(); if (running) running.abort(); if (state && state.metaAbort) state.metaAbort.abort(); });
     syncContext(); setInterval(tick, 1000);
-    env.registerMenu('🌐 CCB 自动优选与网络状态', () => { open = true; render(); });
+    env.registerMenu('🌐 驿程：节点优选与网络状态', () => { open = true; render(); });
     return {observePlayInfo, ingestMetric,
         isVideoContext: () => !!C.identity(location.href),
         clearOverride: () => { try { sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {} },
