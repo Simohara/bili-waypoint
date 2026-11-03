@@ -15,6 +15,8 @@
 
 <img src="dist/preview-stall.png" width="720" alt="驿程浮层：当前节点低于目标，列出三个可换的香港节点">
 
+图文版说明见 [使用说明长图](dist/guide.png)。
+
 ### 安装
 
 1. 装好 [Tampermonkey](https://www.tampermonkey.net/)。Chrome / Edge 还要在扩展详情里打开“允许用户脚本”。
