@@ -55,10 +55,14 @@ async function setup(browser, mode = 'poor', extra = {}) {
     if (extra.clock) await page.clock.install();
     page.on('pageerror', e => errors.push(e.message));
     const pace = {...(extra.slowAll ? {'*': 60} : {}), ...(mode === 'poor' ? {[currentHost]: 60} : {}), ...extra.pace};
-    await page.addInitScript(({script, extra, host, pace}) => {
+    await context.addInitScript(({script, extra, host, pace}) => {
         window.unsafeWindow = window;
-        window.__gm = {CCB_main: host, ...extra.gm};
-        window.GM_getValue = (k, d) => Object.hasOwn(window.__gm, k) ? window.__gm[k] : d;
+        // localStorage stands in for GM storage: it survives reloads and is shared by every page in the context.
+        const gmKey = k => '__gm:' + String(k);
+        if (!localStorage.getItem('__gm')) { localStorage.setItem('__gm', '1'); for (const [k, v] of Object.entries({CCB_main: host, ...extra.gm})) localStorage.setItem(gmKey(k), JSON.stringify(v)); }
+        window.__gm = new Proxy({}, {get: (_, k) => { const v = localStorage.getItem(gmKey(k)); return v === null ? undefined : JSON.parse(v); },
+            set: (_, k, v) => { localStorage.setItem(gmKey(k), JSON.stringify(v)); return true; }});
+        window.GM_getValue = (k, d) => window.__gm[k] ?? d;
         window.GM_setValue = (k, v) => { window.__gm[k] = v; };
         window.GM_registerMenuCommand = (name, action) => (window.__menus ||= []).push([name, action]);
         window.GM_xmlhttpRequest = options => {
@@ -203,7 +207,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await healthy.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await healthy.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.equal(await healthy.page.getByRole('radio').count(), 3);
-        assert.equal(await healthy.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
+        assert.equal(await healthy.page.evaluate(() => window.__gm.CCB_AUTO_active_v1 ?? null), null);
         assert.deepEqual(healthy.errors, []);
         pass('Manual check also offers three verified alternatives for a healthy current node; no automatic replacement');
         await healthy.context.close();
@@ -215,7 +219,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const tested = new Set(poor.requests.filter(r => r.range === 'bytes=0-262143').map(r => r.host));
         assert.equal(tested.size, pool.length - 1);
         assert.ok([...tested].every(host => pool.some(n => n.host === host)));
-        assert.equal(await poor.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
+        assert.equal(await poor.page.evaluate(() => window.__gm.CCB_AUTO_active_v1 ?? null), null);
         const choices = poor.page.getByRole('radio');
         assert.equal(await choices.count(), 3);
         const selectedHost = await choices.nth(2).inputValue();
@@ -228,7 +232,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await poor.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).click();
         await poor.page.waitForLoadState('load');
         await poor.page.waitForTimeout(1600);
-        const saved = await poor.page.evaluate(() => ({active: JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1')), time: document.querySelector('video').currentTime}));
+        const saved = await poor.page.evaluate(() => ({active: window.__gm.CCB_AUTO_active_v1, time: document.querySelector('video').currentTime}));
         assert.equal(saved.active.host, selectedHost); assert.equal(saved.time, 123);
         await poor.page.evaluate(async ({host, asset}) => {
             const r = await fetch('https://' + host + asset, {headers: {Range: 'bytes=0-1023'}}); await r.arrayBuffer();
@@ -244,7 +248,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await stale.page.waitForTimeout(250);
         await stale.page.evaluate(() => history.pushState({}, '', '?p=2'));
         await stale.page.waitForTimeout(1800);
-        assert.equal(await stale.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
+        assert.equal(await stale.page.evaluate(() => window.__gm.CCB_AUTO_active_v1 ?? null), null);
         await stale.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         assert.equal(await stale.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).count(), 0);
         assert.deepEqual(stale.errors, []);
@@ -276,7 +280,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         await invalid.page.getByRole('button', {name: '重新巡站', exact: true}).click();
         await invalid.page.getByText('暂未找到可用的香港／海外节点：HTTP 200 ×15', {exact: true}).waitFor({timeout: 45000});
         assert.equal(await invalid.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).count(), 0);
-        assert.equal(await invalid.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
+        assert.equal(await invalid.page.evaluate(() => window.__gm.CCB_AUTO_active_v1 ?? null), null);
         assert.deepEqual(invalid.errors, []);
         pass('HTTP 200 error pages across all nodes cannot produce a winning replacement');
         await invalid.context.close();
@@ -323,7 +327,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const firstProbe = stalled.page.waitForRequest(request => request.headers().range === 'bytes=0-0', {timeout: 7000});
         const began = Date.now(); await setBuffering(); await firstProbe;
         assert.ok(Date.now() - began >= 2300 && Date.now() - began < 6000);
-        assert.equal(await stalled.page.evaluate(() => sessionStorage.getItem('CCB_AUTO_active_v1')), null);
+        assert.equal(await stalled.page.evaluate(() => window.__gm.CCB_AUTO_active_v1 ?? null), null);
         await stalled.page.getByRole('button', {name: /^改走 .+ 并刷新$/}).waitFor({timeout: 45000});
         assert.equal(await stalled.page.getByRole('radio').count(), 3);
         assert.equal(await stalled.page.locator('.footnote').count(), 0);
@@ -628,37 +632,41 @@ async function setup(browser, mode = 'poor', extra = {}) {
         const gdfs = 'cn-gdfs-ct-01-01.bilivideo.com', autoNode = pool.find(node => node.region === '香港');
         const panel = await setup(browser, 'healthy', {repoDown: true, gm: {CCB_main: gdfs, region_main: '广东'}});
         const panelState = await panel.page.evaluate(async node => {
-            sessionStorage.setItem('CCB_AUTO_active_v1', JSON.stringify({...node, at: Date.now()}));
+            GM_setValue('CCB_AUTO_active_v1', {...node, at: Date.now()});
             window.__menus.find(([name]) => name.startsWith('📺CCB'))[1]();
             for (let i = 0; i < 100 && !document.querySelector('#ccb-settings-panel select'); i++) await new Promise(r => setTimeout(r, 100));
             const [region, nodeSelect] = document.querySelectorAll('#ccb-settings-panel select');
             const shown = {regions: [...region.options].map(o => o.value), region: region.value, node: nodeSelect.value};
             region.value = '广东'; region.dispatchEvent(new Event('change'));
             const [, after] = document.querySelectorAll('#ccb-settings-panel select');
-            return {shown, node: after.value, saved: window.__gm.CCB_main, manualAt: window.__gm.CCB_AUTO_manual_at, active: sessionStorage.getItem('CCB_AUTO_active_v1')};
+            return {shown, node: after.value, saved: window.__gm.CCB_main, active: window.__gm.CCB_AUTO_active_v1 ?? null};
         }, autoNode);
         assert.ok(panelState.shown.regions.includes('香港') && panelState.shown.regions.includes('广东'));
         assert.equal(panelState.shown.node, autoNode.host);
         assert.equal(panelState.node, gdfs); assert.equal(panelState.saved, gdfs);
-        assert.ok(panelState.manualAt > 0); assert.equal(panelState.active, null);
+        assert.equal(panelState.active, null);
         assert.deepEqual(panel.errors, []);
         pass('L10/L13: offline CCB panel lists the bundled snapshot; switching region restores the real saved node');
         await panel.context.close();
 
-        const manualAt = Date.now();
-        const shared = await setup(browser, 'healthy', {gm: {CCB_AUTO_manual_at: manualAt}});
+        const shared = await setup(browser, 'healthy');
+        // A second tab in the same context; it reads the node the first tab approved from shared GM storage.
+        const otherTab = await shared.context.newPage();
+        await otherTab.goto(shared.page.url()); await otherTab.waitForSelector('#ccb-auto-widget', {state: 'attached'});
         const mediaHost = async at => {
-            await shared.page.evaluate(({node, at}) => sessionStorage.setItem('CCB_AUTO_active_v1', JSON.stringify({...node, at})), {node: autoNode, at});
-            await shared.page.reload(); await shared.page.waitForSelector('#ccb-auto-widget', {state: 'attached'});
-            await shared.page.evaluate(async ({host, asset}) => {
+            await shared.page.evaluate(({node, at}) => GM_setValue('CCB_AUTO_active_v1', at ? {...node, at} : null), {node: autoNode, at});
+            return otherTab.evaluate(async ({host, asset}) => {
+                // CCB re-reads storage when a tab becomes visible again, i.e. when the user switches back to it.
+                document.dispatchEvent(new Event('visibilitychange'));
                 const r = await fetch('https://' + host + asset, {headers: {Range: 'bytes=0-1023'}}); await r.arrayBuffer();
+                return new URL(r.url).hostname;
             }, {host: currentHost, asset});
-            return shared.requests.filter(r => r.range === 'bytes=0-1023').at(-1).host;
         };
-        assert.equal(await mediaHost(manualAt - 1000), currentHost);
-        assert.equal(await mediaHost(manualAt + 500), autoNode.host);
+        assert.equal(await mediaHost(Date.now()), autoNode.host);
+        assert.equal(await mediaHost(Date.now() - 86400000 - 1000), currentHost);
+        assert.equal(await mediaHost(0), currentHost);
         assert.deepEqual(shared.errors, []);
-        pass('L12: a later manual choice recorded in shared GM storage (any tab or origin) cancels older automatic picks');
+        pass('L12: an approved node applies to already open tabs; it expires after 24 hours and a manual choice clears it');
         await shared.context.close();
 
         const resigned = {gm: {CCB_AUTO_settings_v1: {everyVideos: 30}}, clock: true};
@@ -778,7 +786,7 @@ async function setup(browser, mode = 'poor', extra = {}) {
 
         const regionKept = await setup(browser, 'healthy', {repoDown: true, gm: {CCB_main: gdfs, region_main: '广东'}});
         const kept = await regionKept.page.evaluate(async node => {
-            sessionStorage.setItem('CCB_AUTO_active_v1', JSON.stringify({...node, at: Date.now()}));
+            GM_setValue('CCB_AUTO_active_v1', {...node, at: Date.now()});
             window.__menus.find(([name]) => name.startsWith('📺CCB'))[1]();
             for (let i = 0; i < 100 && !document.querySelector('#ccb-settings-panel select'); i++) await new Promise(r => setTimeout(r, 100));
             const [, nodeSelect] = document.querySelectorAll('#ccb-settings-panel select');

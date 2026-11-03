@@ -382,10 +382,10 @@ function createCcbAuto(env) {
         const restore = {bvid: s.bvid, cid: s.meta.cid, time: video && video.currentTime || 0,
             paused: !video || video.paused, at: Date.now()};
         try {
-            sessionStorage.setItem('CCB_AUTO_active_v1', JSON.stringify(active));
+            env.setValue('CCB_AUTO_active_v1', active);
             sessionStorage.setItem('CCB_AUTO_restore_v1', JSON.stringify(restore));
             // Verify persistence before refreshing; otherwise the new node would be lost.
-            if (JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1')).host !== active.host) throw new Error();
+            if (env.getValue('CCB_AUTO_active_v1', null).host !== active.host) throw new Error();
             location.reload();
         } catch (_) { message = '无法保存节点，本次未刷新'; render(); }
     }
@@ -771,7 +771,6 @@ function createCcbAuto(env) {
     env.registerMenu('🌐 驿程：节点优选与网络状态', () => { open = true; render(); });
     return {observePlayInfo, ingestMetric,
         isVideoContext: () => !!C.identity(location.href),
-        clearOverride: () => { try { sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {} },
         // Used only by the local fixture tests through the returned lexical controller.
         inspect: () => ({state, session, config, pool, message, running: !!running}), run};
 }

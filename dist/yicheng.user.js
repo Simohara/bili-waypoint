@@ -3,7 +3,7 @@
 // @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态
 // @namespace    bili-waypoint
 // @license      MIT
-// @version      2.3.0
+// @version      2.3.1
 // @author       Simohara
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js
@@ -675,10 +675,10 @@ function createCcbAuto(env) {
         const restore = {bvid: s.bvid, cid: s.meta.cid, time: video && video.currentTime || 0,
             paused: !video || video.paused, at: Date.now()};
         try {
-            sessionStorage.setItem('CCB_AUTO_active_v1', JSON.stringify(active));
+            env.setValue('CCB_AUTO_active_v1', active);
             sessionStorage.setItem('CCB_AUTO_restore_v1', JSON.stringify(restore));
             // Verify persistence before refreshing; otherwise the new node would be lost.
-            if (JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1')).host !== active.host) throw new Error();
+            if (env.getValue('CCB_AUTO_active_v1', null).host !== active.host) throw new Error();
             location.reload();
         } catch (_) { message = '无法保存节点，本次未刷新'; render(); }
     }
@@ -1064,7 +1064,6 @@ function createCcbAuto(env) {
     env.registerMenu('🌐 驿程：节点优选与网络状态', () => { open = true; render(); });
     return {observePlayInfo, ingestMetric,
         isVideoContext: () => !!C.identity(location.href),
-        clearOverride: () => { try { sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {} },
         // Used only by the local fixture tests through the returned lexical controller.
         inspect: () => ({state, session, config, pool, message, running: !!running}), run};
 }
@@ -1083,20 +1082,16 @@ function createCcbAuto(env) {
     const readAutoOverride = () => {
         if (!autoCore.identity(location.href)) return null;
         try {
-            const selected = JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1'));
+            const selected = GM_getValue('CCB_AUTO_active_v1', null);
             if (!selected || Date.now() - selected.at > 86400000 || selected.at > Date.now()) return null;
-            const manualAt = GM_getValue('CCB_AUTO_manual_at', 0);
-            if (selected.at < manualAt && manualAt <= Date.now()) return null;
             const cached = GM_getValue('CCB_AUTO_repo_v1', null);
             const list = cached && cached.url === api + '/cdn.json' && Date.now() - cached.at < 7 * 86400000
                 ? autoCore.nodes(cached.data) : autoCore.nodes(autoSnapshot);
             return list.find(node => node.host === selected.host) || null;
         } catch (_) { return null; }
     };
-    // GM storage spans tabs and origins, so a manual pick on any page (including live) outranks older automatic ones.
-    const clearAutoOverride = () => {
-        try { GM_setValue('CCB_AUTO_manual_at', Date.now()); sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {}
-    };
+    // GM storage spans tabs and origins: an approved node applies to every open tab, and a manual pick on any page (including live) clears it.
+    const clearAutoOverride = () => { try { GM_setValue('CCB_AUTO_active_v1', null); } catch (_) {} };
     // Natives taken at document-start, so a page that later wraps postMessage never sees the private handshake.
     const AutoMessageChannel = unsafeWindow.MessageChannel, autoPostMessage = unsafeWindow.Worker && unsafeWindow.Worker.prototype.postMessage;
     // Module Workers get no metrics channel: with the default source they stay native, and Bilibili starts none.

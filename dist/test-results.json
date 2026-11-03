@@ -35,7 +35,7 @@
     "L21: a stall cooldown stamped in the future (clock moved back) does not block stall checks",
     "L11: module Workers never receive the private metrics handshake",
     "L10/L13: offline CCB panel lists the bundled snapshot; switching region restores the real saved node",
-    "L12: a later manual choice recorded in shared GM storage (any tab or origin) cancels older automatic picks",
+    "L12: an approved node applies to already open tabs; it expires after 24 hours and a manual choice clears it",
     "L3: the 20-minute metadata refresh asks the API again instead of reusing page-load signatures",
     "L7: a page restored from the back/forward cache re-reads the session instead of overwriting it",
     "L9: settings changed in another tab apply when this tab becomes visible",

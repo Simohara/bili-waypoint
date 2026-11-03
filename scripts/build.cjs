@@ -19,7 +19,7 @@ function replaceBlock(start, end, after) {
 }
 replace('// @name         Custom CDN of Bilibili (CCB) - 修改哔哩哔哩的网页视频、直播、番剧的播放源', '// @name         驿程 - B 站香港／海外节点优选');
 replace('// @description  Custom CDN of Bilibili (CCB)', '// @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态');
-replace('// @version      2.1.0', '// @version      2.3.0');
+replace('// @version      2.1.0', '// @version      2.3.1');
 replace('// @author       鼠鼠今天吃嘉然', '// @author       Simohara');
 replace('// @namespace    CCB', '// @namespace    bili-waypoint');
 // Pasted installs update from the published copy too, not only installs made from the link.
@@ -49,20 +49,16 @@ const early = `
     const readAutoOverride = () => {
         if (!autoCore.identity(location.href)) return null;
         try {
-            const selected = JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1'));
+            const selected = GM_getValue('CCB_AUTO_active_v1', null);
             if (!selected || Date.now() - selected.at > 86400000 || selected.at > Date.now()) return null;
-            const manualAt = GM_getValue('CCB_AUTO_manual_at', 0);
-            if (selected.at < manualAt && manualAt <= Date.now()) return null;
             const cached = GM_getValue('CCB_AUTO_repo_v1', null);
             const list = cached && cached.url === api + '/cdn.json' && Date.now() - cached.at < 7 * 86400000
                 ? autoCore.nodes(cached.data) : autoCore.nodes(autoSnapshot);
             return list.find(node => node.host === selected.host) || null;
         } catch (_) { return null; }
     };
-    // GM storage spans tabs and origins, so a manual pick on any page (including live) outranks older automatic ones.
-    const clearAutoOverride = () => {
-        try { GM_setValue('CCB_AUTO_manual_at', Date.now()); sessionStorage.removeItem('CCB_AUTO_active_v1'); } catch (_) {}
-    };
+    // GM storage spans tabs and origins: an approved node applies to every open tab, and a manual pick on any page (including live) clears it.
+    const clearAutoOverride = () => { try { GM_setValue('CCB_AUTO_active_v1', null); } catch (_) {} };
     // Natives taken at document-start, so a page that later wraps postMessage never sees the private handshake.
     const AutoMessageChannel = unsafeWindow.MessageChannel, autoPostMessage = unsafeWindow.Worker && unsafeWindow.Worker.prototype.postMessage;
     // Module Workers get no metrics channel: with the default source they stay native, and Bilibili starts none.

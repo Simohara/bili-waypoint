@@ -21,8 +21,12 @@ async function setup(browser, gsapSource, {theme = 'dark', reduce = false} = {})
     page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript({content: gsapSource});
     await page.addInitScript(({script, host}) => {
-        window.unsafeWindow = window; window.__gm = {CCB_main: host};
-        window.GM_getValue = (k, d) => Object.hasOwn(window.__gm, k) ? window.__gm[k] : d;
+        window.unsafeWindow = window;
+        const gmKey = k => '__gm:' + String(k);
+        if (!localStorage.getItem('__gm')) { localStorage.setItem('__gm', '1'); for (const [k, v] of Object.entries({CCB_main: host})) localStorage.setItem(gmKey(k), JSON.stringify(v)); }
+        window.__gm = new Proxy({}, {get: (_, k) => { const v = localStorage.getItem(gmKey(k)); return v === null ? undefined : JSON.parse(v); },
+            set: (_, k, v) => { localStorage.setItem(gmKey(k), JSON.stringify(v)); return true; }});
+        window.GM_getValue = (k, d) => window.__gm[k] ?? d;
         window.GM_setValue = (k, v) => { window.__gm[k] = v; };
         window.GM_registerMenuCommand = (name, fn) => { if (name.includes('驿程')) window.__menu = fn; };
         window.GM_xmlhttpRequest = options => {
@@ -169,7 +173,7 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         assert.deepEqual(await inWidget(page, r => [r.querySelector('.go').textContent, Number(getComputedStyle(r.querySelector('.seal')).opacity) > .9]), ['正在刷新…', true]);
         await shot(page, 'stamp');
         await reload; await page.waitForLoadState('load');
-        assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('CCB_AUTO_active_v1')).host), chosen);
+        assert.equal(await page.evaluate(() => window.__gm.CCB_AUTO_active_v1.host), chosen);
         pass('改走 draws the trail, stamps 换, then reloads onto the chosen node');
 
         await page.addStyleTag({content: LIGHT});
