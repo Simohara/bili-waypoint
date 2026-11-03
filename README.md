@@ -8,9 +8,10 @@ B 站视频页的香港／海外 CDN 节点优选，基于 [CCB 2.1.0](https://g
 
 ## 安装
 
-1. 关闭旧版 CCB 和其他会改播放源的脚本。
-2. 在 Tampermonkey 里新建脚本，粘贴 [`dist/ccb-auto.user.js`](dist/ccb-auto.user.js) 的全部内容。
-3. 刷新视频页。
+1. 装好 [Tampermonkey](https://www.tampermonkey.net/)。Chrome / Edge 还要在扩展详情里打开“允许用户脚本”。
+2. 关闭旧版 CCB 和其他会改播放源的脚本。
+3. 打开 [安装链接](https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js)，在 Tampermonkey 弹出的页面点“安装”。以后有新版本会自动更新。
+4. 刷新 B 站视频页，标题旁出现状态胶囊就说明装好了。
 
 默认值、测速规则和界面说明见 [README.zh-CN.md](README.zh-CN.md)。
 

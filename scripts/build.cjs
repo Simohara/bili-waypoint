@@ -21,6 +21,8 @@ replace('// @name         Custom CDN of Bilibili (CCB) - 修改哔哩哔哩的�
 replace('// @description  Custom CDN of Bilibili (CCB)', '// @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态');
 replace('// @version      2.1.0', '// @version      2.2.0-auto.4');
 replace('// @namespace    CCB', '// @namespace    CCB-Auto');
+// Pasted installs update from the published copy too, not only installs made from the link.
+replace('// @run-at       document-start', '// @run-at       document-start\n// @downloadURL  https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js\n// @updateURL    https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js');
 replace('// @match        https://www.bilibili.com/video/*', '// @match        https://www.bilibili.com/video/*\n// @match        https://www.bilibili.com/*/video/*');
 replace('// @connect      kanda-akihito-kun.github.io', '// @connect      kanda-akihito-kun.github.io\n// @connect      raw.githubusercontent.com');
 replace('// @grant        GM_xmlhttpRequest', '// @require      https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js\n// @grant        GM_xmlhttpRequest');
