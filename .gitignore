@@ -36,3 +36,4 @@ __pycache__/
 /analysis/
 /android-external/
 /dist/android-external/
+!/dist/qingzhou/*.apk
