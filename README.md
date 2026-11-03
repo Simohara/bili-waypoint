@@ -1,35 +1,71 @@
 # bili-waypoint
 
-**驿程**：B 站视频页的香港／海外 CDN 节点优选脚本，从 [CCB 2.1.0](https://github.com/Kanda-Akihito-kun/ccb) 分出，只有节点列表仍取自上游。
+**驿程**：B 站视频页的香港／海外 CDN 节点优选脚本。从 [CCB 2.1.0](https://github.com/Kanda-Akihito-kun/ccb) 分出，保留原版的播放地址拦截和直播／番剧手动设置；只有节点列表仍取自上游。
 
-- 每看几个视频或卡顿时测速，在香港／海外节点里挑最快的 3 个；点“改走 … 并刷新”才换源。
+- 每看几个视频，或播放卡顿时，测当前节点的延迟和吞吐；不达标就在香港／海外节点里找最快的 3 个。
+- 点“改走 … 并刷新”才换源，脚本从不自己刷新页面。
 - 标题旁的胶囊显示实时加载速度，点开是“驿程”浮层。
+
+<img src="dist/preview-stall.png" width="720" alt="驿程浮层：当前节点低于目标，列出三个可换的香港节点">
 
 ## 安装
 
 1. 装好 [Tampermonkey](https://www.tampermonkey.net/)。Chrome / Edge 还要在扩展详情里打开“允许用户脚本”。
-2. 关闭旧版 CCB 和其他会改播放源的脚本。
-3. 打开 [安装链接](https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js)，点“安装”。以后有新版本会自动更新。
-4. 刷新 B 站视频页，标题旁出现状态胶囊就装好了。
+2. 关闭旧版 CCB 和其他会改播放源的脚本，避免重复拦截。
+3. 打开 [安装链接](https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js)，点“安装”。以后按版本号自动更新。
+4. 刷新 B 站视频页（海外访问跳到的 `/zh-Hans/video/` 也算），标题旁出现状态胶囊就装好了。
 
-默认值、测速规则和界面说明见 [README.zh-CN.md](README.zh-CN.md)。
+## 使用
 
-## 构建
+**胶囊**
+- **Mbps**：当前视频最近一段媒体下载的速度，不含首字节等待；没有新数据时显示最近一次测速结果。
+- **ms**：HTTP 请求延迟，不是 ping。
+- **路线图标**：测速时显示“n/15 巡站中”；有换源建议时末站变朱色，没找到可用节点时末站变空心。
+- **—**：没有可靠样本。播放器已经缓冲完或暂停时，没有下载是正常的。
+
+**浮层**：列出当前节点和它的问题（如“低于目标 35”），以及最多 3 个可换的节点，每个都有地区、延迟、速度和“当前几倍”。
+- **改走 … 并刷新**：盖下“换”字驿印后刷新，并恢复播放进度。
+- **保持当前**：放弃这次建议。
+- **重新巡站**：立即测一遍，测速中变为“取消”。
+- **设置**：检查间隔、延迟上限、目标速度，以及自动检查和卡顿检测的开关。
+
+选好的节点只对当前标签页生效，有效 24 小时。在原版 CCB 面板里手动选节点或地区，会让之前的自动选择失效。
+
+## 默认规则
+
+| 项目 | 默认 |
+| --- | --- |
+| 自动检查 | 每看 3 个视频一次；视频要可见地播满 20 秒才计数；两次至少隔 10 分钟 |
+| 卡顿检查 | 连续缓冲约 2.5 秒就测，不等计数；同一次卡顿只测一次，两次至少隔 90 秒 |
+| 达标标准 | HTTP 延迟不超过 350 ms，速度不低于 35 Mbps。4K 码率更高时按码率的 1.3 倍提高；没有 4K 轨道时取最高轨道码率的 1.3 倍 |
+| 检查当前节点 | 3 次 1 字节请求取延迟中位数，下 1 MiB 测速；结果可疑时再用 2 MiB 复测 |
+| 找备选节点 | 每个节点先测 256 KiB，前 5 名一定用 2 MiB 复测并校验音频，取最快的 3 个达标节点 |
+| 没找到 | 周期检查不弹浮层；30 分钟内不再周期检查，10 分钟内不做卡顿测速 |
+| 建议有效期 | 2 分钟 |
+
+测速只在前台进行。周期检查会等到播放位置之后至少缓冲 5 秒、最近 2 秒播放器没在下载时再测，免得只测到剩余带宽。切视频、切分 P 或隐藏标签页会取消测速。
+
+## 节点来源
+
+只用上游 [`data/cdn.json`](https://raw.githubusercontent.com/Kanda-Akihito-Kun/ccb/main/data/cdn.json) 里“香港”“海外”两组，不推荐大陆节点。运行时每小时最多更新一次；拉取失败就用缓存，再不行用脚本内置的快照（本仓库 `data/`）。“香港／海外”是上游的分组，不代表已核实服务器的物理位置。
+
+## 开发
 
 ```bash
-node scripts/update-nodes.cjs   # 可选：从上游刷新 data/ 里的节点列表
+node scripts/update-nodes.cjs   # 可选：从上游刷新 data/ 的节点快照
 node scripts/build.cjs          # 输出 dist/yicheng.user.js
-node tests/run.cjs              # 主流程
+node tests/run.cjs              # 主流程，结果写入 dist/test-results.json
 node tests/ui.cjs               # 界面
 ```
 
-`vendor/ccb.js` 是收进来的 CCB 2.1.0 原版，构建按锚点把 `src/` 拼进去。测试用 Playwright 驱动系统 Chrome。
-
-## 目录
+`vendor/ccb.js` 是收进来的 CCB 2.1.0 原版，构建按锚点把 `src/` 拼进去，锚点对不上就停止构建。测试在本地模拟页面上用 Playwright 驱动系统 Chrome，没有在真实账号和播放器上验收。
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/`、`scripts/`、`tests/` | 脚本源码、构建、测试 |
-| `vendor/ccb.js` | CCB 2.1.0 原版脚本 |
-| `data/` | 节点列表快照，来自上游 |
-| `dist/` | 构建好的脚本和测试截图 |
+| `src/auto-core.js` | 测速与调度规则 |
+| `src/auto-runtime.js` | 页面识别、测速、换源批准、浮层 |
+| `src/telemetry.js`、`src/worker-base.js` | 页面和 Worker 里的下载观测 |
+| `src/stall-watcher.js` | 卡顿检测 |
+| `src/widget.css` | 界面样式 |
+| `vendor/ccb.js`、`data/` | CCB 原版脚本，节点快照 |
+| `dist/` | 构建好的脚本、测试结果和截图 |
