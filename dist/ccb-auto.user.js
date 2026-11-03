@@ -6,8 +6,8 @@
 // @version      2.2.0-auto.4
 // @author       鼠鼠今天吃嘉然
 // @run-at       document-start
-// @downloadURL  https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js
-// @updateURL    https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js
+// @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js
+// @updateURL    https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js
 // @match        https://www.bilibili.com/video/*
 // @match        https://www.bilibili.com/*/video/*
 // @match        https://www.bilibili.com/bangumi/play/*

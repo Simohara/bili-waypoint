@@ -22,7 +22,18 @@ __pycache__/
 
 # Tool state
 /.playwright-mcp/
-/.impeccable/
+.impeccable/
 .taste-skill/
-/.claude/*
-!/.claude/launch.json
+/.claude/
+
+# Kept locally, outside this repository: other projects, research material and design drafts
+/airbridge/
+/android/
+/design/
+/diagnostics.html
+/dist/android/
+/dist/LICENSE
+/android-external/design/
+/analysis/*
+!/analysis/android/
+!/analysis/review-2026-11-03/

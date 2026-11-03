@@ -5,7 +5,7 @@
 ## 安装
 
 1. 先关闭旧版 CCB，以及其他同时修改 B 站播放源的脚本，避免叠加拦截。
-2. 打开 [安装链接](https://raw.githubusercontent.com/Simohara/ccb-auto/main/dist/ccb-auto.user.js)，在 Tampermonkey 的安装页点“安装”；以后按版本号自动更新。也可以在管理面板新建脚本，粘贴 `dist/ccb-auto.user.js` 的完整内容。Chrome / Edge 需要先在扩展详情里打开“允许用户脚本”。
+2. 打开 [安装链接](https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/ccb-auto.user.js)，在 Tampermonkey 的安装页点“安装”；以后按版本号自动更新。也可以在管理面板新建脚本，粘贴 `dist/ccb-auto.user.js` 的完整内容。Chrome / Edge 需要先在扩展详情里打开“允许用户脚本”。
 3. 刷新普通视频页（海外访问时跳转到的 `/zh-Hans/video/` 这类带语言前缀的地址同样生效）。标题右侧出现高 28 px 的状态胶囊，点开是“驿程”浮层。第一次从视频首页导航进入已打开的网页时，也建议完整刷新一次，让 document-start Hook 安装到位。
 
 ## 默认行为
