@@ -580,6 +580,8 @@ function createCcbAuto(env) {
         if (!g) return;
         if (ui.tl) ui.tl.progress(1).kill();
         ui.tl = view.opening ? opener(g) : p ? reveal(g, before, height) : null;
+        // Transforms count as scrollable overflow, so the footer's travel would flash a scrollbar and squeeze the rows for the length of the animation.
+        if (ui.tl) { panel.style.overflow = 'hidden'; ui.tl.eventCallback('onComplete', () => { panel.style.overflow = ''; }); }
     }
     // The capsule's width follows its text; a periodic check that found a node also redraws the route and lands a small stamp, in place of opening the panel.
     function capsuleMotion(g, tag, width) {

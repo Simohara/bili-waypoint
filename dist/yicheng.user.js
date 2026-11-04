@@ -3,7 +3,7 @@
 // @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态
 // @namespace    bili-waypoint
 // @license      MIT
-// @version      2.4.0
+// @version      2.4.1
 // @author       Simohara
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js
@@ -873,6 +873,8 @@ function createCcbAuto(env) {
         if (!g) return;
         if (ui.tl) ui.tl.progress(1).kill();
         ui.tl = view.opening ? opener(g) : p ? reveal(g, before, height) : null;
+        // Transforms count as scrollable overflow, so the footer's travel would flash a scrollbar and squeeze the rows for the length of the animation.
+        if (ui.tl) { panel.style.overflow = 'hidden'; ui.tl.eventCallback('onComplete', () => { panel.style.overflow = ''; }); }
     }
     // The capsule's width follows its text; a periodic check that found a node also redraws the route and lands a small stamp, in place of opening the panel.
     function capsuleMotion(g, tag, width) {

@@ -317,5 +317,37 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         assert.deepEqual(still.errors, []);
         pass('Reduced motion keeps state changes and drops travel, zoom and squash');
         await still.context.close();
+
+        // Playwright hides scrollbars unless told otherwise, which kept this out of every earlier run.
+        const barred = await chromium.launch({channel: 'chrome', headless: true, ignoreDefaultArgs: ['--hide-scrollbars']});
+        try {
+            const bars = await setup(barred, gsapSource, {theme: 'light'});
+            await inWidget(bars.page, r => {
+                const panel = r.querySelector('.panel'); window.__bar = 0;
+                const walk = () => { if (!panel.hidden) window.__bar = Math.max(window.__bar, panel.offsetWidth - panel.clientWidth); requestAnimationFrame(walk); };
+                walk();
+            });
+            const widest = () => bars.page.evaluate(() => { const bar = window.__bar; window.__bar = 0; return bar; });
+            const close = async () => { await bars.page.getByRole('button', {name: '收起', exact: true}).click(); await bars.page.waitForTimeout(300); };
+            await bars.capsule.click();
+            await bars.page.waitForTimeout(1900);
+            assert.equal(await widest(), 0, 'first opening');
+            await close();
+            await bars.capsule.click();
+            await bars.page.waitForTimeout(900);
+            assert.equal(await widest(), 0, 'reopening');
+            await scanToProposal(bars.page);
+            assert.equal(await widest(), 0, 'scan and results arriving');
+            await close();
+            await bars.capsule.click();
+            await bars.page.waitForTimeout(900);
+            assert.equal(await widest(), 0, 'reopening with candidates');
+            await bars.page.setViewportSize({width: 1440, height: 400});
+            await bars.page.waitForTimeout(300);
+            assert.ok(await inWidget(bars.page, r => { const panel = r.querySelector('.panel'); return panel.offsetWidth > panel.clientWidth && panel.scrollHeight > panel.clientHeight; }), 'a panel taller than the window still scrolls');
+            assert.deepEqual(bars.errors, []);
+            pass('The panel shows no scrollbar while animating and keeps it when it is really taller than the window');
+            await bars.context.close();
+        } finally { await barred.close(); }
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

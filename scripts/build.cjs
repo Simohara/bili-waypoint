@@ -19,7 +19,7 @@ function replaceBlock(start, end, after) {
 }
 replace('// @name         Custom CDN of Bilibili (CCB) - 修改哔哩哔哩的网页视频、直播、番剧的播放源', '// @name         驿程 - B 站香港／海外节点优选');
 replace('// @description  Custom CDN of Bilibili (CCB)', '// @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态');
-replace('// @version      2.1.0', '// @version      2.4.0');
+replace('// @version      2.1.0', '// @version      2.4.1');
 replace('// @author       鼠鼠今天吃嘉然', '// @author       Simohara');
 replace('// @namespace    CCB', '// @namespace    bili-waypoint');
 // Pasted installs update from the published copy too, not only installs made from the link.
