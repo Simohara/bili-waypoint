@@ -111,6 +111,7 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         await page.waitForTimeout(1200);
         assert.ok(await fonts(page));
         assert.equal(await inWidget(page, r => r.querySelector('.panel').style.clipPath), '');
+        assert.deepEqual(light.errors, []);
         await shot(page, 'idle');
         pass('Capsule opens the panel; fonts load from the document; the open clip is cleared');
 
@@ -139,13 +140,28 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         pass('Proposal lists one row per candidate, the vermilion end on the capsule and “N 站可换”');
         assert.equal(await page.getByText(/^\d+ ms · 低于目标 35$/).isVisible(), true);
         pass('L19: the current node’s problem is written in the panel, not only in a tooltip');
+        assert.match(await inWidget(page, r => r.querySelector('.note').textContent), /^回到 2:03 继续 · 延迟 \d+→\d+ ms$/);
+        pass('The panel says a refresh keeps the place and what it does to latency');
+        // Rendered glyphs, not element boxes: a box can line up while its text does not.
+        const grid = await inWidget(page, r => {
+            const panel = r.querySelector('.panel').getBoundingClientRect(), left = n => n.getBoundingClientRect().left - panel.left, right = n => panel.right - n.getBoundingClientRect().right;
+            const glyph = n => { const t = document.createRange(); t.setStart(n.firstChild, 0); t.setEnd(n.firstChild, 1); return t.getBoundingClientRect().left - panel.left; };
+            const rows = [...r.querySelectorAll('.stop')], name = s => s.querySelector('strong').getBoundingClientRect(), dot = s => s.querySelector('.dot').getBoundingClientRect();
+            return {decimals: rows.map(s => glyph(s.querySelector('.dec'))), units: rows.map(s => right(s.querySelector('.u'))), names: rows.map(s => left(s.querySelector('strong'))),
+                stops: rows.map(s => (name(s).top + name(s).height / 2) - (dot(s).top + dot(s).height / 2)), go: [left(r.querySelector('.go')), right(r.querySelector('.go'))], brand: left(r.querySelector('.brand'))};
+        });
+        assert.ok(new Set(grid.decimals).size === 1, 'decimal points share a column: ' + grid.decimals);
+        assert.ok(grid.units.every(x => Math.abs(x - 20) < .01) && grid.go.every(x => Math.abs(x - 20) < .01) && Math.abs(grid.brand - 20) < .01, 'right and left edges sit on 20');
+        assert.ok(grid.names.every(x => Math.abs(x - 52) < .01), 'names sit on 52');
+        assert.ok(grid.stops.every(x => Math.abs(x) < .51), 'route stops centre on the name line: ' + grid.stops);
+        pass('Alignment: decimals in one column, edges on the grid, route stops on the name line');
 
         const host = await page.getByRole('radio').nth(1).inputValue();
         await page.getByRole('radio').nth(1).check();
         await page.waitForTimeout(700);
         const picked = await inWidget(page, r => {
-            const row = r.querySelectorAll('.stop.cand')[1], mark = r.querySelector('.mark');
-            return {dest: r.querySelector('.go b').textContent, delta: Math.abs(mark.offsetTop + 8.5 - (row.offsetTop + row.offsetHeight / 2)), sel: r.querySelectorAll('.st.sel').length};
+            const row = r.querySelectorAll('.stop.cand')[1], mark = r.querySelector('.mark'), name = row.querySelector('strong');
+            return {dest: r.querySelector('.go b').textContent, delta: Math.abs(mark.offsetTop + 8.5 - (row.offsetTop + name.offsetTop + name.offsetHeight / 2)), sel: r.querySelectorAll('.st.sel').length};
         });
         assert.equal(picked.dest, host.replace(/\.bilivideo\.com$/, '').replace(/^(?:cn-|upos-[a-z0-9]+-)/, ''));
         assert.ok(picked.delta < 1); assert.equal(picked.sel, 1);
@@ -159,8 +175,9 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         await page.getByRole('button', {name: '设置', exact: true}).click();
 
         await page.getByRole('button', {name: '收起', exact: true}).click();
-        assert.equal(await page.getByRole('dialog').count(), 0);
         await page.waitForTimeout(300);
+        assert.equal(await page.getByRole('dialog').count(), 0);
+        assert.match(await capsuleText(page), /^[\d.]+ Mbps 可快 [\d.]+ 倍$/);
         await shot(page, 'alert');
         await capsule.click();
         await page.waitForTimeout(1500);
@@ -169,12 +186,17 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         await page.waitForTimeout(500);
         const reload = page.waitForEvent('framenavigated', {timeout: 8000});
         await page.getByRole('button', {name: GO}).click();
+        assert.equal(await inWidget(page, r => Number(getComputedStyle(r.querySelector('.ring')).opacity)), 0, 'the ring waits for the seal');
+        assert.equal(await inWidget(page, r => r.querySelector('.panel').inert), true, 'nothing can change mid-stamp');
         await page.waitForTimeout(900);
         assert.deepEqual(await inWidget(page, r => [r.querySelector('.go').textContent, Number(getComputedStyle(r.querySelector('.seal')).opacity) > .9]), ['正在刷新…', true]);
         await shot(page, 'stamp');
         await reload; await page.waitForLoadState('load');
         assert.equal(await page.evaluate(() => window.__gm.CCB_AUTO_active_v1.host), chosen);
         pass('改走 draws the trail, stamps 换, then reloads onto the chosen node');
+        await page.waitForFunction(() => document.querySelector('#ccb-auto-widget')?.shadowRoot.querySelector('.cap.after'));
+        assert.match(await capsuleText(page), /^[\d.—]+ Mbps 已换 .+$/);
+        pass('After the refresh the capsule reports the switch');
 
         await page.addStyleTag({content: LIGHT});
         await page.waitForTimeout(1400);
@@ -186,6 +208,7 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         assert.equal(await page.evaluate(() => document.activeElement.id), 'comment');
         await page.getByRole('button', {name: '设置', exact: true}).focus();
         await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
         assert.equal(await page.getByRole('dialog').count(), 0);
         assert.equal(await inWidget(page, r => r.activeElement && r.activeElement.classList.contains('cap')), true);
         pass('L14: Esc from the comment box leaves the panel alone; Esc inside closes it and returns focus');
@@ -273,8 +296,8 @@ const shot = (page, name) => page.screenshot({path: path.join(shots, 'impl-' + n
         await scanToProposal(still.page);
         await still.page.getByRole('radio').last().check();
         assert.ok(await inWidget(still.page, r => {
-            const row = [...r.querySelectorAll('.stop.cand')].at(-1), mark = r.querySelector('.mark');
-            return Math.abs(mark.offsetTop + 8.5 - (row.offsetTop + row.offsetHeight / 2)) < 1;
+            const row = [...r.querySelectorAll('.stop.cand')].at(-1), mark = r.querySelector('.mark'), name = row.querySelector('strong');
+            return Math.abs(mark.getBoundingClientRect().top + 8.5 - (name.getBoundingClientRect().top + name.offsetHeight / 2)) < 1;
         }), 'the mark jumps without travelling');
         await still.page.getByRole('button', {name: '收起', exact: true}).click();
         await still.capsule.click();

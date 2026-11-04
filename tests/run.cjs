@@ -275,6 +275,16 @@ async function setup(browser, mode = 'poor', extra = {}) {
         pass('Third qualified video triggers one automatic small check; settings are editable and persisted');
         await counting.context.close();
 
+        const quiet = await setup(browser, 'poor', {gm: {CCB_AUTO_settings_v1: {watchedSeconds: 5, everyVideos: 3}},
+            session: {views: 2, lastCheckViews: 0, lastCheckAt: Date.now() - 20 * 60000, lastCountedBvid: 'BV13aH46QEZ6'}});
+        await quiet.page.waitForFunction(() => document.querySelector('#ccb-auto-widget')?.shadowRoot.querySelector('.cap.alert'), null, {timeout: 60000});
+        assert.equal(await quiet.page.getByRole('dialog').count(), 0);
+        await quiet.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
+        assert.ok(await quiet.page.getByRole('radio').count() >= 1);
+        assert.deepEqual(quiet.errors, []);
+        pass('A periodic check that finds a faster node marks the capsule and leaves the panel closed');
+        await quiet.context.close();
+
         const invalid = await setup(browser, 'healthy', {invalid: true});
         await invalid.page.getByRole('button', {name: '驿程：视频网络状态与设置'}).click();
         await invalid.page.getByRole('button', {name: '重新巡站', exact: true}).click();

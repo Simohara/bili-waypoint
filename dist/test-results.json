@@ -11,6 +11,7 @@
     "Only explicit approval persists the node, reloads, restores position and redirects actual media requests",
     "SPA/P switch cancels old measurements and drops old proposals",
     "Third qualified video triggers one automatic small check; settings are editable and persisted",
+    "A periodic check that finds a faster node marks the capsule and leaves the panel closed",
     "HTTP 200 error pages across all nodes cannot produce a winning replacement",
     "When only two alternatives are usable, exactly those two are selectable; failed nodes are excluded",
     "Transient waits, pause, seeking, buffered stalled events and hidden pages do not trigger probes",

@@ -3,7 +3,7 @@
 // @description  每几个视频检查延迟与吞吐，香港/海外节点优选，批准刷新后应用，标题旁显示加载状态
 // @namespace    bili-waypoint
 // @license      MIT
-// @version      2.3.1
+// @version      2.4.0
 // @author       Simohara
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/Simohara/bili-waypoint/main/dist/yicheng.user.js
@@ -293,7 +293,7 @@ function installCcbWorkerBase(base) {
 
 /* CCB Auto: contextual measurements, repository nodes, consent UI. MIT. */
 function createCcbAuto(env) {
-    const C = env.core, SKEY = 'CCB_AUTO_session_v1', CONFIG = 'CCB_AUTO_settings_v1', CACHE = 'CCB_AUTO_repo_v1';
+    const C = env.core, SKEY = 'CCB_AUTO_session_v1', CONFIG = 'CCB_AUTO_settings_v1', CACHE = 'CCB_AUTO_repo_v1', SWITCHED = 'CCB_AUTO_switched_v1';
     const repoUrl = 'https://raw.githubusercontent.com/Kanda-Akihito-Kun/ccb/main/data/cdn.json';
     const safeRead = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) || fallback; } catch (_) { return fallback; } };
     const saveSession = () => { try { sessionStorage.setItem(SKEY, JSON.stringify(session)); } catch (_) {} };
@@ -328,6 +328,7 @@ function createCcbAuto(env) {
         stallWatcher.dispose();
         if (running) running.abort();
         if (state && state.metaAbort) state.metaAbort.abort();
+        if (state) switched = null; // moving on to another video, not the first sync after the reload
         state = id ? {key, ...id, watched: 0, counted: false, createdAt: Date.now(), live: null,
             probe: null, proposal: null, results: [], meta: null, pendingMetrics: [], preparing: false, retryAfter: 0} : null;
         rawPlay = null; open = false; message = '等待视频加载';
@@ -617,7 +618,9 @@ function createCcbAuto(env) {
             return 'none';
         }
         s.proposal = {candidates: finalists, selectedHost: finalists[0].host, old: observed, at: Date.now(), required, key: s.key};
-        message = '请选择节点'; open = true; return 'proposal';
+        message = '请选择节点';
+        if (fullScan) open = true; // a periodic check only marks the capsule
+        return 'proposal';
     }
     async function run(manual = false, reason = 'periodic') {
         syncContext(); const s = state;
@@ -668,7 +671,7 @@ function createCcbAuto(env) {
         if (!p || !current(s) || p.key !== s.key) return;
         if (C.since(p.at, Date.now()) > 120000) { s.proposal = null; message = '结果已过期，请重新测速'; render(); return; }
         const candidate = p.candidates.find(node => node.host === p.selectedHost);
-        if (!candidate || !pool.some(n => n.host === candidate.host) || !C.healthy(candidate, config, p.required)) return;
+        if (!candidate || !pool.some(n => n.host === candidate.host) || !C.healthy(candidate, config, p.required)) { s.proposal = null; message = '候选已失效，请重新巡站'; render(); return; }
         const video = videoElement();
         // This is the only automatic-node write, and only a user click reaches it.
         const active = {host: candidate.host, region: candidate.region, at: Date.now()};
@@ -677,6 +680,7 @@ function createCcbAuto(env) {
         try {
             env.setValue('CCB_AUTO_active_v1', active);
             sessionStorage.setItem('CCB_AUTO_restore_v1', JSON.stringify(restore));
+            sessionStorage.setItem(SWITCHED, JSON.stringify({bvid: s.bvid, host: candidate.host, from: p.old.mbps, mbps: candidate.mbps, at: Date.now()}));
             // Verify persistence before refreshing; otherwise the new node would be lost.
             if (env.getValue('CCB_AUTO_active_v1', null).host !== active.host) throw new Error();
             location.reload();
@@ -702,13 +706,16 @@ function createCcbAuto(env) {
     const FONTS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap';
     const CAP = '<svg viewBox="0 0 24 10" aria-hidden="true"><rect class="track" x="0" y="3.5" width="24" height="3"/><rect class="fill" x="0" y="3.5" width="24" height="3"/>'
         + '<rect class="start" x="0" y="1" width="8" height="8"/><rect class="end" x="16" y="1" width="8" height="8"/></svg><b class="num"></b><span></span><em></em>';
+    const ROAD = 'M384 54C352 58 330 46 300 62S240 92 190 90 110 86 76 98 36 107 27.5 112';
+    // The road is dashed, so it cannot be drawn by its own dash offset; a solid copy in a mask draws it instead.
     const PANEL = '<header class="hd"><svg viewBox="0 0 384 112" preserveAspectRatio="xMinYMax slice" aria-hidden="true">'
+        + `<defs><mask id="ccb-road-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="384" height="112"><path class="reveal" d="${ROAD}" fill="none" stroke="#fff" stroke-width="6"/></mask></defs>`
         + '<path class="hill" d="M0 94 60 84 120 90 180 70 232 78 282 46 332 60 384 38V112H0Z" fill="#fff" fill-opacity=".06"/>'
         + '<path class="hill" d="M0 102 70 94 140 100 200 84 262 94 322 72 384 82V112H0Z" fill="#fff" fill-opacity=".1"/>'
         + '<path class="hill" d="M0 107 80 100 160 107 240 100 320 107 384 102V112H0Z" fill="#000" fill-opacity=".22"/>'
-        + '<path class="road" d="M384 54C352 58 330 46 300 62S240 92 190 90 110 86 76 98 36 107 27.5 112"/><g></g><rect class="horse" width="9" height="9"/></svg>'
+        + `<path class="road" d="${ROAD}"/><g class="sts"></g><rect class="horse" width="9" height="9"/></svg>`
         + '<div class="brand"><strong>驿程</strong><span></span></div><button type="button" class="x" aria-label="收起">×</button></header>'
-        + '<div class="route"></div><button type="button" class="go"><span></span></button>'
+        + '<div class="route"></div><button type="button" class="go"><span></span></button><div class="note"></div>'
         + '<div class="ft"><button type="button">保持当前</button><button type="button"></button><button type="button" class="cfg" aria-expanded="false">设置</button></div>'
         + '<form class="set" hidden><label>自动检查<input type="checkbox" name="enabled"></label>'
         + '<label title="连续缓冲约 2.5 秒后测速">卡顿时测速<small hidden>随自动检查关闭</small><input type="checkbox" name="stallDetection"></label>'
@@ -720,13 +727,26 @@ function createCcbAuto(env) {
     // No motion while the host is display:none: GSAP cannot measure the SVG there and falls back to the document.
     const G = () => typeof gsap === 'undefined' || !hostElement || hostElement.hidden ? null : gsap;
     const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const mid = node => node.offsetTop + node.offsetHeight / 2;
+    // A row's anchor is its name line, so the route's stops read across to the name and the figure.
+    const mid = node => { const name = node.querySelector('strong'); return node.offsetTop + name.offsetTop + name.offsetHeight / 2; };
     const station = host => shortHost(host).replace(/^(?:cn-|upos-[a-z0-9]+-)/, '');
     const nodeHost = s => s.meta ? activeHost(s) : C.host(env.getNode());
     const times = (candidate, old) => {
         const x = old && old.mbps > 0 ? candidate.mbps / old.mbps : NaN;
-        return Number.isFinite(x) ? '当前 ' + (x >= 10 ? Math.round(x) : x.toFixed(1)) + ' 倍' : '';
+        return Number.isFinite(x) ? '快 ' + (x >= 10 ? Math.round(x) : x.toFixed(1)) + ' 倍' : '';
     };
+    const clock = t => { const m = Math.floor(t / 60), p = n => String(Math.floor(n)).padStart(2, '0'); return (m >= 60 ? Math.floor(m / 60) + ':' + p(m % 60) : m) + ':' + p(t % 60); };
+    // The panel names what the refresh keeps and what it costs; a reload otherwise looks like losing the place.
+    const noteText = (p, candidate) => {
+        const video = videoElement(), at = video && video.currentTime > 0 ? `回到 ${clock(video.currentTime)} 继续 · ` : '';
+        return Number.isFinite(p.old.pingMs) ? `${at}延迟 ${Math.round(p.old.pingMs)}→${Math.round(candidate.pingMs)} ms` : at.slice(0, -3);
+    };
+    // Written just before an approved reload, read once here: the capsule reports the switch instead of silently going back to normal.
+    let switched = (() => {
+        const saved = safeRead(SWITCHED, null), id = C.identity(location.href);
+        try { sessionStorage.removeItem(SWITCHED); } catch (_) {}
+        return saved && id && saved.bvid === id.bvid && C.since(saved.at, Date.now()) < 120000 ? {...saved, shown: saved.mbps, until: 0} : null;
+    })();
     function element(tag, text, className) {
         const node = document.createElement(tag); if (text !== undefined) node.textContent = text;
         if (className) node.className = className; return node;
@@ -734,13 +754,18 @@ function createCcbAuto(env) {
     function button(text, action, className = '') {
         const b = element('button', text, className); b.type = 'button'; b.addEventListener('click', action); return b;
     }
-    function row(kind, name, chip, info, value, unit, gain) {
+    function row(kind, name, chip, info, value, gain) {
         const r = element(kind === 'cur' ? 'div' : 'label', undefined, 'stop ' + kind), txt = element('div', undefined, 'txt');
-        const meta = element('span', undefined, 'meta'), fig = element('div', undefined, 'fig'), num = element('b', value, 'num');
+        const meta = element('span', undefined, 'meta'), fig = element('div', undefined, 'fig'), num = element('b', undefined, 'num');
         meta.append(element('em', chip, 'chip'), element('span', info, 'info')); txt.append(element('strong', name), meta);
-        if (unit) num.append(element('small', unit));
+        num.append(element('span', '', 'int'), element('span', '', 'dec'), element('span', 'Mbps', 'u')); figure(num, value);
         fig.append(num); if (gain) fig.append(element('span', gain, 'gain'));
         r.append(element('i', undefined, 'dot'), txt, fig); return r;
+    }
+    // Integer and fraction sit in separate columns: the display face has no tabular figures, so this is what lines up the decimal points.
+    function figure(num, value) {
+        const [whole, part] = number(value).split('.');
+        num.children[0].textContent = whole; num.children[1].textContent = part ? '.' + part : '';
     }
     function mount() {
         if (hostElement || !document.documentElement) return;
@@ -752,10 +777,10 @@ function createCcbAuto(env) {
         panel = element('section', undefined, 'panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', '驿程');
         panel.hidden = true; panel.innerHTML = PANEL;
         const $ = selector => panel.querySelector(selector), [keep, scan, cfg] = $('.ft').children;
-        ui = {key: null, num: badge.querySelector('.num'), unit: badge.querySelector('span'), ms: badge.querySelector('em'), fill: badge.querySelector('.fill'),
-            hd: $('.hd'), hills: [...panel.querySelectorAll('.hill')], road: $('.road'), group: $('.hd g'), horse: $('.horse'), brand: $('.brand'),
-            sub: $('.brand span'), route: $('.route'), go: $('.go'), label: $('.go span'), dest: element('b'), ft: $('.ft'), keep, scan, cfg,
-            set: $('.set'), stations: [], sig: '', at: -1, pos: 0, deco: {}, cur: null, gap: null, cands: [], p: null};
+        ui = {key: null, num: badge.querySelector('.num'), unit: badge.querySelector('span'), ms: badge.querySelector('em'), fill: badge.querySelector('.fill'), end: badge.querySelector('.end'),
+            hd: $('.hd'), hills: [...panel.querySelectorAll('.hill')], road: $('.road'), reveal: $('.reveal'), group: $('.sts'), horse: $('.horse'), brand: $('.brand'),
+            sub: $('.brand span'), route: $('.route'), go: $('.go'), label: $('.go span'), dest: element('b'), note: $('.note'), ft: $('.ft'), keep, scan, cfg,
+            set: $('.set'), stations: [], sig: '', at: -1, pos: 0, deco: {}, cur: null, gap: null, cands: [], p: null, seen: false, capTag: ''};
         $('.x').addEventListener('click', () => { open = false; render(); });
         ui.go.addEventListener('click', go);
         keep.addEventListener('click', () => { if (!state) return; state.proposal = null; open = false; message = '已保留当前节点'; render(); });
@@ -772,7 +797,7 @@ function createCcbAuto(env) {
         if (typeof CSSPlugin !== 'undefined' && CSSPlugin.register) CSSPlugin.register();
         // @font-face inside a shadow root is ignored, so the fonts are linked at document level.
         const fonts = element('link'); fonts.rel = 'stylesheet'; fonts.href = FONTS; (document.head || document.documentElement).append(fonts);
-        document.addEventListener('pointerdown', e => { if (!e.composedPath().includes(hostElement) && open) { open = false; render(); } });
+        document.addEventListener('pointerdown', e => { if (!e.composedPath().includes(hostElement) && open && !ui.busy) { open = false; render(); } });
         // Only Esc pressed inside the widget closes it; comment boxes and the player keep theirs.
         hostElement.addEventListener('keydown', e => { if (e.key === 'Escape' && open) { open = false; render(); badge.focus(); } });
     }
@@ -811,54 +836,80 @@ function createCcbAuto(env) {
         const s = state, fresh = s.live && Date.now() - s.live.at < 12000;
         const sample = fresh ? s.live : s.probe, stops = pool.map(n => n.host).filter(host => host !== nodeHost(s));
         const total = stops.length || 1, done = Math.min(s.results.length, total), scanning = !!running && (done > 0 || message.startsWith('筛选'));
-        ui.num.textContent = scanning ? done + '/' + total : number(sample && sample.mbps);
+        if (switched && switched.until && Date.now() >= switched.until) switched = null;
+        const after = !!switched && !running && !s.proposal, tag = after ? 'after' : s.proposal ? 'alert' : '', width = tag !== ui.capTag ? badge.offsetWidth : 0, g = G();
+        ui.num.textContent = scanning ? done + '/' + total : number(after ? switched.shown : sample && sample.mbps);
         ui.unit.textContent = scanning ? '巡站中' : 'Mbps';
-        ui.ms.textContent = scanning ? '' : running ? '测速中' : number(sample && sample.pingMs, 0) + ' ms';
-        ui.fill.setAttribute('width', scanning ? 24 * done / total : 24);
-        badge.classList.toggle('alert', !!s.proposal);
+        ui.ms.textContent = scanning ? '' : running ? '测速中' : after ? '已换 ' + station(switched.host)
+            : s.proposal && times(s.proposal.candidates[0], s.proposal.old) ? times(s.proposal.candidates[0], s.proposal.old).replace('快', '可快') : number(sample && sample.pingMs, 0) + ' ms';
+        if (!(ui.capTl && ui.capTl.isActive())) ui.fill.setAttribute('width', scanning ? 24 * done / total : 24);
+        badge.classList.toggle('alert', !!s.proposal); badge.classList.toggle('after', after);
+        if (tag !== ui.capTag) capsuleMotion(g, tag, width);
+        if (after && g && !switched.until) settleSwitch(g);
         // A scan that found nothing leaves the end station hollow for the quiet window instead of opening the panel.
         badge.classList.toggle('miss', !s.proposal && !running && C.since(session.missAt, Date.now()) < 3 * config.cooldownMinutes * 60000);
         badge.title = (fresh ? '当前视频分段加载速度（含缓存影响）' : '上次主动测速 ' + (s.probe ? new Date(s.probe.at).toLocaleTimeString() : '尚无结果') + '；点击查看详情') + '\nHTTP 延迟，非 ICMP ping\n' + message;
         badge.setAttribute('aria-expanded', String(open));
         // Finish a running timeline while its targets can still be measured.
-        if (!open && !panel.hidden && ui.tl) { ui.tl.progress(1).kill(); ui.tl = null; }
-        const opening = open && panel.hidden; panel.hidden = !open;
+        if (!open && !panel.hidden && !ui.fading) {
+            if (ui.tl) { ui.tl.progress(1).kill(); ui.tl = null; }
+            if (g && !still()) ui.fading = g.to(panel, {opacity: 0, duration: .16, ease: 'power2.in', onComplete: () => { ui.fading = null; panel.style.opacity = ''; panel.hidden = true; render(); }});
+            else panel.hidden = true;
+        }
+        if (open && ui.fading) { ui.fading.kill(); ui.fading = null; panel.style.opacity = ''; panel.hidden = true; }
+        const opening = open && panel.hidden; if (open) panel.hidden = false;
         if (opening) position();
         if (open) renderPanel(s, s.proposal ? s.proposal.old : sample, {opening, stops, scanning, done, total});
-        else if (settingsOpen) toggleSettings(false);
+        else if (settingsOpen && panel.hidden) toggleSettings(false);
         schedulePosition();
     }
     function renderPanel(s, sample, view) {
         const p = s.proposal, key = [s.key, p ? p.at : 0, view.scanning].join('|'), rebuild = view.opening || key !== ui.key;
-        const before = ui.deco.line ? ui.deco.line.offsetHeight : 0, g = G();
+        const before = ui.deco.line ? ui.deco.line.offsetHeight : 0, height = ui.route.offsetHeight, g = G();
         if (rebuild) { ui.key = key; build(p, view.scanning); }
         update(s, sample, view);
         if (!rebuild) return;
         layout();
         if (!g) return;
         if (ui.tl) ui.tl.progress(1).kill();
-        ui.tl = view.opening ? opener(g) : p ? reveal(g.timeline(), 0, before) : null;
+        ui.tl = view.opening ? opener(g) : p ? reveal(g, before, height) : null;
+    }
+    // The capsule's width follows its text; a periodic check that found a node also redraws the route and lands a small stamp, in place of opening the panel.
+    function capsuleMotion(g, tag, width) {
+        ui.capTag = tag;
+        if (!g || still()) return;
+        g.fromTo(badge, {width}, {width: badge.offsetWidth, duration: .28, ease: 'power3.out', clearProps: 'width'});
+        if (tag === 'alert' && !open) ui.capTl = g.timeline().fromTo(ui.fill, {attr: {width: 0}}, {attr: {width: 24}, duration: .6, ease: 'power2.inOut'})
+            .fromTo(ui.end, {scale: 2.4}, {scale: 1, duration: .3, ease: 'power4.in', transformOrigin: '50% 50%', immediateRender: false}, '-=0.05');
+    }
+    // After an approved reload: the figure climbs from the old speed to the verified one, then the capsule returns to normal.
+    function settleSwitch(g) {
+        const sw = switched; sw.until = Date.now() + 10000;
+        if (still() || !Number.isFinite(sw.from)) return;
+        const o = {v: sw.from}; sw.shown = sw.from;
+        g.to(o, {v: sw.mbps, duration: .9, ease: 'power2.out', onUpdate: () => { sw.shown = o.v; ui.num.textContent = number(o.v); }});
     }
     function build(p, scanning) {
         const route = ui.route, deco = ui.deco = {};
         route.replaceChildren();
         for (const name of ['line', 'trail', 'hl', 'mark', 'rider', 'ring', 'seal']) route.append(deco[name] = element('i', name === 'seal' ? '换' : undefined, name));
         deco.hl.hidden = deco.mark.hidden = !p;
-        route.append(ui.cur = row('cur', '', '当前', '', '—', 'Mbps'));
+        route.append(ui.cur = row('cur', '', '当前', '', NaN));
         ui.gap = p || scanning ? route.appendChild(element('div', undefined, 'gap')) : null;
         ui.p = p; ui.cands = p ? p.candidates.map((c, i) => {
-            const r = row('cand', station(c.host), c.region, number(c.pingMs, 0) + ' ms', number(c.mbps), i ? '' : 'Mbps', times(c, p.old));
+            const r = row('cand', station(c.host), c.region, number(c.pingMs, 0) + ' ms', c.mbps, times(c, p.old));
             const radio = element('input'); radio.type = 'radio'; radio.name = 'ccb-auto-candidate'; radio.value = c.host;
             radio.checked = c.host === p.selectedHost; radio.setAttribute('aria-label', `第 ${i + 1} 名 ${c.host}，${c.region}`);
             r.title = c.host; r.prepend(radio); route.append(r); return r;
         }) : [];
-        ui.go.hidden = ui.keep.hidden = !p;
+        ui.go.hidden = ui.keep.hidden = ui.note.hidden = !p;
         ui.label.replaceChildren('改走 ', ui.dest, ' 并刷新'); ui.dest.textContent = p ? station(p.selectedHost) : '';
         if (scanning) { ui.at = -1; ride(0, true); }
     }
     function update(s, sample, {stops, scanning, done, total}) {
         const p = s.proposal, required = s.required || config.minMbps, host = nodeHost(s), num = ui.cur.querySelector('.num');
-        ui.sub.textContent = p && message === '请选择节点' ? `巡过 ${done} 站 · 香港 / 海外` : scanning ? `巡站 ${done} / ${total}` : message;
+        // Verification follows a full scan, so 15/15 alone would look stuck; the message names the station being verified.
+        ui.sub.textContent = p && message === '请选择节点' ? `巡过 ${done} 站 · 香港 / 海外` : scanning && !message.startsWith('验证') ? `巡站 ${done} / ${total}` : message;
         ui.cur.querySelector('strong').textContent = station(host);
         // The last check's problems stay visible on touch screens as short phrases after the latency.
         const brief = r => /^速度 /.test(r) ? '低于目标 ' + Math.round(required) : /^HTTP 延迟 /.test(r) ? '延迟偏高' : /候选池/.test(r) ? '不在候选池' : r.split(/[，：]/)[0];
@@ -866,7 +917,8 @@ function createCcbAuto(env) {
             : sample && sample.pingMs > config.maxPingMs ? ['延迟偏高'] : [];
         ui.cur.querySelector('.info').textContent = [number(sample && sample.pingMs, 0) + ' ms', ...notes].join(' · ');
         ui.cur.title = [host, ...(s.problem || [])].join('\n');
-        if (!(num.roll && num.roll.isActive())) num.firstChild.nodeValue = number(sample && sample.mbps);
+        figure(num, sample && sample.mbps);
+        if (p) { const chosen = p.candidates.find(c => c.host === p.selectedHost); if (chosen) ui.note.textContent = noteText(p, chosen); }
         if (ui.gap) ui.gap.replaceChildren(...(p ? [element('b', String(p.candidates.length)), ' 站可换'] : ['巡站中 ', element('b', String(done)), ' / ' + total]));
         ui.scan.textContent = running ? '取消' : '重新巡站';
         light(s, stops, scanning);
@@ -893,8 +945,7 @@ function createCcbAuto(env) {
             const size = pick ? 9 : 7, lit = t.kind === '' && kind;
             t.kind = kind; t.rect.setAttribute('class', 'st ' + kind);
             for (const [k, v] of [['x', t.x - size / 2], ['y', t.y - size / 2], ['width', size], ['height', size]]) t.rect.setAttribute(k, v);
-            if (lit && scanning && motion) g.fromTo(t.rect, {scale: 2.2}, {scale: 1, duration: .35, ease: 'back.out(2)', transformOrigin: '50% 50%'});
-        });
+            if (lit && scanning && motion) g.fromTo(t.rect, {scale: 2.2}, {scale: 1, duration: .35, ease: 'back.out(2)', transformOrigin: '50% 50%'});        });
         ui.hd.classList.toggle('riding', scanning);
         if (scanning) ride(last < 0 ? 0 : ui.stations[last].at);
     }
@@ -903,22 +954,28 @@ function createCcbAuto(env) {
         ui.at = to; if (ui.ride) ui.ride.kill();
         const g = G(), o = {t: ui.pos}, put = t => {
             const point = ui.road.getPointAtLength(ui.road.getTotalLength() * t);
-            ui.pos = t; ui.horse.setAttribute('x', point.x - 4.5); ui.horse.setAttribute('y', point.y - 4.5);
+            // Turned 45° so the moving horse reads apart from the square stations it passes.
+            ui.pos = t; ui.horse.setAttribute('x', point.x - 4.5); ui.horse.setAttribute('y', point.y - 4.5); ui.horse.setAttribute('transform', `rotate(45 ${point.x} ${point.y})`);
         };
         if (jump || !g || still()) return put(to);
         ui.ride = g.to(o, {t: to, duration: .4, ease: 'power1.inOut', onUpdate: () => put(o.t)});
     }
     function layout() {
+        for (const r of [ui.cur, ...ui.cands]) r.querySelector('.dot').style.top = mid(r) - r.offsetTop - 6.5 + 'px';
         ui.deco.line.style.height = mid(ui.cands.at(-1) || ui.cur) + 'px';
         if (ui.p) place(false);
     }
     function place(animate) {
         const r = ui.cands[ui.p.candidates.findIndex(c => c.host === ui.p.selectedHost)], {hl, mark} = ui.deco, g = G();
         if (!r) return;
-        const top = r.offsetTop, height = r.offsetHeight, markTop = mid(r) - 8.5;
-        if (!animate || !g || still()) { hl.style.top = top + 'px'; hl.style.height = height + 'px'; mark.style.top = markTop + 'px'; return; }
-        g.to(hl, {top, height, duration: .42, ease: 'power3.inOut'});
-        g.to(mark, {top: markTop, duration: .42, ease: 'power3.inOut'});
+        const top = r.offsetTop, markTop = mid(r) - 8.5, origin = ui.route.getBoundingClientRect().top, box = n => n.getBoundingClientRect();
+        // Measured before moving, so a second pick mid-slide continues from where the mark visibly is.
+        const hlFrom = box(hl).top - origin, markFrom = box(mark).top + box(mark).height / 2 - origin - 8.5;
+        hl.style.top = top + 'px'; hl.style.height = r.offsetHeight + 'px'; mark.style.top = markTop + 'px';
+        if (!animate || !g || still()) return;
+        // FLIP: the row is already in place; only the transform travels.
+        g.fromTo(hl, {y: hlFrom - top}, {y: 0, duration: .42, ease: 'power3.inOut'});
+        g.fromTo(mark, {y: markFrom - markTop}, {y: 0, duration: .42, ease: 'power3.inOut'});
         g.fromTo(mark, {scaleY: 1}, {keyframes: [{scaleY: 1.5, scaleX: .8, duration: .21}, {scaleY: 1, scaleX: 1, duration: .21}], ease: 'sine.inOut'});
     }
     function choose(input) {
@@ -928,50 +985,82 @@ function createCcbAuto(env) {
         const dest = ui.dest, name = station(input.value), shift = still() ? 0 : 100;
         if (!g) { dest.textContent = name; return; }
         g.timeline().to(dest, {yPercent: -shift, opacity: 0, duration: .14, ease: 'power2.in'}).call(() => { dest.textContent = name; })
-            .fromTo(dest, {yPercent: shift}, {yPercent: 0, opacity: 1, duration: .22, ease: 'power3.out'});
+            // immediateRender off: a fromTo renders its start at creation, which would drop the old name out of the button on frame one.
+            .fromTo(dest, {yPercent: shift, opacity: 0}, {yPercent: 0, opacity: 1, duration: .22, ease: 'power3.out', immediateRender: false});
     }
     // The vermilion trail runs from the current stop to the chosen one and the 换 seal lands before reload.
     function go() {
         const p = state && state.proposal, g = G();
         if (!p || ui.busy) return;
-        const finish = () => { const before = message; ui.busy = false; approve(); if (message !== before) { ui.key = null; render(); } };
+        // A pick or a close during the stamp would stamp one node and refresh onto another, or skip the stamp.
+        const finish = () => { const before = message; ui.busy = false; panel.inert = false; approve(); if (message !== before) { ui.key = null; render(); } };
         const target = ui.cands[p.candidates.findIndex(c => c.host === p.selectedHost)];
         if (!g || !target) return finish();
-        ui.busy = true;
+        ui.busy = true; panel.inert = true;
         const R = still(), {trail, rider, seal, ring} = ui.deco, a = mid(ui.cur), b = mid(target), travel = R ? .01 : .55;
         if (ui.tl) ui.tl.progress(1).kill();
         ui.tl = g.timeline().set(trail, {top: a, height: b - a, scaleY: 0}).set(rider, {top: a - 6.5, opacity: 1})
             .to(trail, {scaleY: 1, duration: travel, ease: 'power2.inOut'})
             .to(rider, {top: b - 6.5, duration: travel, ease: 'power2.inOut'}, '<')
             .set(rider, {opacity: 0})
-            .fromTo(seal, {top: b - 18, scale: R ? 1 : 2.6, rotation: R ? -8 : -26, opacity: 0}, {scale: 1, rotation: -8, opacity: 1, duration: .3, ease: 'power4.in'})
-            .fromTo(ring, {top: b - 18, scale: 1, opacity: .7}, {scale: R ? 1 : 2.4, opacity: 0, duration: .5, ease: 'power2.out'})
+            .fromTo(seal, {top: b - 18, scale: R ? 1 : 2.6, rotation: R ? -8 : -26, opacity: 0}, {scale: 1, rotation: -8, opacity: 1, duration: .3, ease: 'power4.in', immediateRender: false})
+            .fromTo(ring, {top: b - 18, scale: 1, opacity: .7}, {scale: R ? 1 : 2.4, opacity: 0, duration: .5, ease: 'power2.out', immediateRender: false})
             .add(nudge(panel, 'translate', R ? 0 : 2, {duration: .05, yoyo: true, repeat: 1}), '<')
             .call(() => { ui.label.textContent = '正在刷新…'; }, null, '<')
             .call(finish, null, '+=0.35');
     }
+    // GSAP re-parents hidden elements to read their transform, so only visible ones move.
+    const foot = () => [ui.go, ui.note, ui.ft].filter(n => !n.hidden);
     function opener(g) {
-        const R = still(), tl = g.timeline({defaults: {ease: 'power3.out'}});
-        tl.fromTo(panel, {clipPath: 'inset(0 0 100% 0)'}, {clipPath: 'inset(0 0 0% 0)', duration: R ? .01 : .5, clearProps: 'clipPath'})
-            .fromTo(ui.hills, {y: R ? 0 : 14, opacity: 0}, {y: 0, opacity: 1, duration: .6, stagger: .08}, '<0.1')
-            .fromTo(ui.brand, {y: R ? 0 : 8, opacity: 0}, {y: 0, opacity: 1, duration: .4}, '<0.1')
-            .fromTo(ui.stations.map(t => t.rect), {scale: R ? 1 : 0, opacity: 0}, {scale: 1, opacity: 1, duration: .3, stagger: .025, ease: 'back.out(3)', transformOrigin: '50% 50%'}, '<0.1')
-            .fromTo(ui.deco.line, {scaleY: R ? 1 : 0}, {scaleY: 1, duration: .55, ease: 'power2.inOut'}, '<');
-        return reveal(tl, '<0.15');
+        const first = !ui.seen, tl = g.timeline(), rows = [ui.cur, ui.gap, ...ui.cands].filter(Boolean), marks = ui.p ? [ui.deco.hl, ui.deco.mark] : [];
+        ui.seen = true;
+        if (still()) return tl.fromTo(panel, {opacity: 0}, {opacity: 1, duration: .15, clearProps: 'opacity'});
+        tl.fromTo(panel, {clipPath: 'inset(0 0 100% 0)'}, {clipPath: 'inset(0 0 0% 0)', duration: first ? .5 : .36, ease: 'power3.out', clearProps: 'clipPath'}, 0);
+        if (!first) {
+            // Reopening skips the road but keeps the travel: quicker, not abrupt.
+            tl.fromTo(rows, {y: 10, opacity: 0}, {y: 0, opacity: 1, duration: .32, stagger: .05, ease: 'power3.out', clearProps: 'transform,opacity'}, .08);
+            if (marks.length) tl.fromTo(marks, {opacity: 0}, {opacity: 1, duration: .24, clearProps: 'opacity'}, .2);
+            return tl.fromTo(foot(), {y: 8, opacity: 0}, {y: 0, opacity: 1, duration: .28, stagger: .04, ease: 'power3.out', clearProps: 'transform,opacity'}, .22);
+        }
+        tl.fromTo(ui.hills, {y: 14, opacity: 0}, {y: 0, opacity: 1, duration: .6, stagger: .08, ease: 'power3.out'}, .1)
+            .fromTo(ui.brand, {y: 8, opacity: 0}, {y: 0, opacity: 1, duration: .4, ease: 'power3.out'}, .2);
+        stroke(g, tl, rows, marks);
+        return tl.fromTo(foot(), {y: 10, opacity: 0}, {y: 0, opacity: 1, duration: .35, stagger: .06, ease: 'power3.out', clearProps: 'transform,opacity'}, .75);
     }
-    function reveal(tl, at, from) {
-        const R = still(), rows = [ui.cur, ui.gap, ...ui.cands].filter(Boolean), {line, hl, mark} = ui.deco;
-        tl.addLabel('rows', at);
-        if (from) tl.fromTo(line, {height: from}, {height: line.offsetHeight, duration: .5, ease: 'power2.inOut'}, 'rows');
-        return tl.fromTo(rows, {y: R ? 0 : 14, opacity: 0}, {y: 0, opacity: 1, duration: .42, stagger: .07, ease: 'power3.out'}, 'rows')
-            .call(() => ui.route.querySelectorAll('.num').forEach((num, i) => roll(num, .9 + i * .08)), null, 'rows')
-            .fromTo([hl, mark], {opacity: 0}, {opacity: 1, duration: .3}, 'rows+=0.35')
-            // GSAP re-parents hidden elements to read their transform, so only visible ones move.
-            .fromTo([ui.go, ui.ft].filter(n => !n.hidden), {y: R ? 0 : 10, opacity: 0}, {y: 0, opacity: 1, duration: .35, stagger: .06, ease: 'power3.out'}, 'rows+=0.3');
+    // One stroke: the road draws first, then the same tip runs on down the route line. Whatever it passes appears.
+    function stroke(g, tl, rows, marks) {
+        const o = {p: 0}, share = .42, length = ui.road.getTotalLength(), {line} = ui.deco, height = line.offsetHeight, rects = ui.stations.map(t => t.rect), shown = new Set();
+        const once = (node, vars) => { if (!shown.has(node)) { shown.add(node); g.to(node, {opacity: 1, ...vars}); } };
+        const rowIn = {y: 0, duration: .42, ease: 'power3.out', clearProps: 'transform,opacity'}, stopIn = {scale: 1, duration: .3, ease: 'back.out(3)'}, markIn = {duration: .3, clearProps: 'opacity'};
+        const chosen = ui.p && ui.cands[ui.p.candidates.findIndex(c => c.host === ui.p.selectedHost)];
+        g.set(rows, {y: 14, opacity: 0}); g.set(rects, {scale: 0, opacity: 0, transformOrigin: '50% 50%'}); g.set(line, {scaleY: 0});
+        if (marks.length) g.set(marks, {opacity: 0});
+        ui.road.setAttribute('mask', 'url(#ccb-road-mask)'); ui.reveal.style.strokeDasharray = length; ui.reveal.style.strokeDashoffset = length;
+        tl.to(o, {p: 1, duration: 1, ease: 'power1.inOut', onUpdate() {
+            const road = Math.min(1, o.p / share), down = Math.max(0, (o.p - share) / (1 - share));
+            ui.reveal.style.strokeDashoffset = length * (1 - road);
+            ui.stations.forEach(t => { if (road >= t.at) once(t.rect, stopIn); });
+            g.set(line, {scaleY: down});
+            rows.forEach(r => { if (r.offsetTop <= down * height + 6) { once(r, rowIn); if (r === chosen) marks.forEach(m => once(m, markIn)); } });
+        }, onComplete() {
+            ui.road.removeAttribute('mask'); rects.forEach(n => once(n, stopIn)); rows.forEach(n => once(n, rowIn)); marks.forEach(n => once(n, markIn));
+        }}, .1);
     }
-    function roll(num, duration) {
-        const node = num.firstChild, to = Number(node.nodeValue), o = {v: 0}, g = G();
-        if (g && Number.isFinite(to)) num.roll = g.to(o, {v: to, duration, ease: 'power2.out', onUpdate: () => { node.nodeValue = o.v.toFixed(1); }});
+    // Candidates arriving with the panel open: the route grows to reach them and each figure climbs from the current speed.
+    function reveal(g, from, height) {
+        const tl = g.timeline(), rows = [ui.gap, ...ui.cands].filter(Boolean), {line, hl, mark} = ui.deco, old = ui.p.old.mbps;
+        if (still()) return tl.fromTo([...rows, hl, mark, ...foot()], {opacity: 0}, {opacity: 1, duration: .15, clearProps: 'opacity'});
+        tl.fromTo(ui.route, {height, overflow: 'hidden'}, {height: ui.route.offsetHeight, duration: .5, ease: 'power2.inOut', clearProps: 'height,overflow'}, 0)
+            .fromTo(line, {scaleY: from / line.offsetHeight}, {scaleY: 1, duration: .5, ease: 'power2.inOut'}, 0)
+            .fromTo(rows, {y: 14, opacity: 0}, {y: 0, opacity: 1, duration: .42, stagger: .07, ease: 'power3.out', clearProps: 'transform,opacity'}, 0)
+            .fromTo([hl, mark], {opacity: 0}, {opacity: 1, duration: .3, clearProps: 'opacity'}, .35)
+            .fromTo(foot(), {y: 10, opacity: 0}, {y: 0, opacity: 1, duration: .35, stagger: .06, ease: 'power3.out', clearProps: 'transform,opacity'}, .3);
+        if (Number.isFinite(old)) ui.cands.forEach((r, i) => {
+            const num = r.querySelector('.num'), o = {v: old};
+            figure(num, old);
+            tl.to(o, {v: ui.p.candidates[i].mbps, duration: .9 + i * .08, ease: 'power2.out', onUpdate: () => figure(num, o.v)}, 0);
+        });
+        return tl;
     }
     // GSAP 3.12 re-parents position:fixed elements to read their transform, so the capsule, the panel and
     // the buttons move through the separate CSS scale/translate properties via a proxy object instead.
@@ -1072,7 +1161,7 @@ function createCcbAuto(env) {
     const autoSnapshot = {"上海":["cn-sh-ct-01-01.bilivideo.com","cn-sh-ct-01-06.bilivideo.com","cn-sh-ct-01-13.bilivideo.com","cn-sh-ct-01-15.bilivideo.com","cn-sh-ct-01-23.bilivideo.com","cn-sh-ct-01-24.bilivideo.com","cn-sh-ct-01-35.bilivideo.com","cn-sh-ct-01-36.bilivideo.com","cn-sh-office-bcache-01.bilivideo.com"],"内蒙":["cn-nmghhht-cm-01-11.bilivideo.com","cn-nmghhht-cu-01-01.bilivideo.com","cn-nmghhht-cu-01-07.bilivideo.com","cn-nmghhht-cu-01-08.bilivideo.com","cn-nmghhht-cu-01-09.bilivideo.com","cn-nmghhht-cu-01-10.bilivideo.com","cn-nmghhht-cu-01-12.bilivideo.com","cn-nmghhht-cu-01-13.bilivideo.com","cn-nmghhht-cu-01-14.bilivideo.com","cn-nmghhht-cu-01-15.bilivideo.com"],"北京":["cn-bj-cc-03-14.bilivideo.com","cn-bj-cc-03-17.bilivideo.com","cn-bj-fx-01-04.bilivideo.com","cn-bj-fx-01-05.bilivideo.com","cn-bj-se-01-03.bilivideo.com","cn-bj-se-01-04.bilivideo.com","cn-bj-se-01-05.bilivideo.com","cn-bj-se-01-06.bilivideo.com"],"四川":["cn-sccd-cm-03-01.bilivideo.com","cn-sccd-cm-03-02.bilivideo.com","cn-sccd-cm-03-05.bilivideo.com","cn-sccd-cm-03-07.bilivideo.com","cn-sccd-ct-01-02.bilivideo.com","cn-sccd-ct-01-08.bilivideo.com","cn-sccd-ct-01-10.bilivideo.com","cn-sccd-ct-01-17.bilivideo.com","cn-sccd-ct-01-18.bilivideo.com","cn-sccd-ct-01-19.bilivideo.com","cn-sccd-ct-01-20.bilivideo.com","cn-sccd-ct-01-21.bilivideo.com","cn-sccd-ct-01-22.bilivideo.com","cn-sccd-ct-01-23.bilivideo.com","cn-sccd-ct-01-24.bilivideo.com","cn-sccd-ct-01-25.bilivideo.com","cn-sccd-ct-01-26.bilivideo.com","cn-sccd-ct-01-27.bilivideo.com","cn-sccd-ct-01-29.bilivideo.com","cn-sccd-cu-01-01.bilivideo.com","cn-sccd-cu-01-02.bilivideo.com","cn-sccd-cu-01-03.bilivideo.com","cn-sccd-cu-01-04.bilivideo.com","cn-sccd-cu-01-05.bilivideo.com","cn-sccd-cu-01-06.bilivideo.com","cn-sccd-cu-01-07.bilivideo.com","cn-sccd-cu-01-08.bilivideo.com","cn-sccd-cu-01-09.bilivideo.com","cn-sccd-fx-01-01.bilivideo.com","cn-sccd-fx-01-06.bilivideo.com","cn-scdy-ct-01-05.bilivideo.com"],"外建":["c0--cn-gotcha01.bilivideo.com","c1--cn-gotcha09.bilivideo.com","c1--cn-gotcha208.bilivideo.com","d0--cn-gotcha01.bilivideo.com","d0--cn-gotcha09.bilivideo.com","d0--cn-gotcha208-01.bilivideo.com","d1--cn-gotcha04.bilivideo.com","d1--cn-gotcha04b.bilivideo.com","d1--cn-gotcha07.bilivideo.com","d1--cn-gotcha07b.bilivideo.com","d1--cn-gotcha09.bilivideo.com","d1--cn-gotcha101.bilivideo.com","d1--cn-gotcha102.bilivideo.com","d1--cn-gotcha204-1.bilivideo.com","d1--cn-gotcha204-2.bilivideo.com","d1--cn-gotcha204-3.bilivideo.com","d1--cn-gotcha204-4.bilivideo.com","d1--cn-gotcha204.bilivideo.com","d1--cn-gotcha207.bilivideo.com","d1--cn-gotcha208.bilivideo.com","d1--cn-gotcha208b.bilivideo.com","d1--cn-gotcha209.bilivideo.com","d1--cn-gotcha209b.bilivideo.com","d1--cn-gotcha211.bilivideo.com","d1--cn-gotcha308.bilivideo.com","d1--ov-gotcha01.bilivideo.com","d1--ov-gotcha03.bilivideo.com","d1--ov-gotcha05.bilivideo.com","d1--ov-gotcha07.bilivideo.com","d1--ov-gotcha207.bilivideo.com","d1--ov-gotcha207b.bilivideo.com","d1--ov-gotcha208.bilivideo.com","d1--ov-gotcha209.bilivideo.com","d1--ov-gotcha210.bilivideo.com","d1--p1--cn-gotcha04.bilivideo.com","d1--p2--cn-gotcha04.bilivideo.com","d1--tf-gotcha01-loc.bilivideo.com","d1--tf-gotcha01.bilivideo.com","d1--tf-gotcha04.bilivideo.com","d1--tf-gotcha08.bilivideo.com","d1-cn-gotcha210.bilivideo.com"],"天津":["cn-tj-cm-02-01.bilivideo.com","cn-tj-cm-02-02.bilivideo.com","cn-tj-cm-02-03.bilivideo.com","cn-tj-cm-02-04.bilivideo.com","cn-tj-cm-02-05.bilivideo.com","cn-tj-cm-02-06.bilivideo.com","cn-tj-cm-02-07.bilivideo.com","cn-tj-cu-01-01.bilivideo.com","cn-tj-cu-01-02.bilivideo.com","cn-tj-cu-01-03.bilivideo.com","cn-tj-cu-01-04.bilivideo.com","cn-tj-cu-01-05.bilivideo.com","cn-tj-cu-01-06.bilivideo.com","cn-tj-cu-01-07.bilivideo.com","cn-tj-cu-01-08.bilivideo.com","cn-tj-cu-01-09.bilivideo.com","cn-tj-cu-01-10.bilivideo.com","cn-tj-cu-01-11.bilivideo.com","cn-tj-cu-01-12.bilivideo.com","cn-tj-cu-01-13.bilivideo.com","cn-tj-cu-01-16.bilivideo.com","cn-tj-cu-01-17.bilivideo.com","cn-tj-fx-01-01.bilivideo.com","cn-tj-fx-01-05.bilivideo.com"],"山东":["cn-sdjn-cm-02-01.bilivideo.com","cn-sdjn-cm-02-02.bilivideo.com","cn-sdjn-cm-02-03.bilivideo.com","cn-sdjn-cm-02-04.bilivideo.com","cn-sdjn-cm-02-05.bilivideo.com","cn-sdjn-cm-02-06.bilivideo.com","cn-sdjn-cm-02-07.bilivideo.com","cn-sdjn-cm-02-08.bilivideo.com","cn-sdjn-cm-02-09.bilivideo.com","cn-sdjn-cm-02-10.bilivideo.com","cn-sdjn-cm-02-11.bilivideo.com","cn-sdjn-cm-02-12.bilivideo.com","cn-sdjn-cm-02-13.bilivideo.com","cn-sdjn-fx-01-01.bilivideo.com","cn-sdjn-fx-01-02.bilivideo.com","cn-sdqd-ccc-01-01.bilivideo.com","cn-sdqd-cu-01-01.bilivideo.com","cn-sdqd-cu-01-08.bilivideo.com","cn-sdqd-cu-01-09.bilivideo.com","cn-sdqd-cu-01-11.bilivideo.com","cn-sdqd-cu-01-16.bilivideo.com","cn-sdqd-cu-01-17.bilivideo.com","cn-sdqd-cu-01-21.bilivideo.com","cn-sdqd-cu-01-22.bilivideo.com","cn-sdqd-cu-01-23.bilivideo.com","cn-sdqd-cu-01-24.bilivideo.com","cn-sdqd-cu-01-25.bilivideo.com"],"山西":["cn-sxty-cm-02-04.bilivideo.com","cn-sxty-cm-02-09.bilivideo.com","cn-sxty-cm-02-10.bilivideo.com","cn-sxty-cu-03-01.bilivideo.com","cn-sxty-cu-03-02.bilivideo.com","cn-sxty-cu-03-03.bilivideo.com","cn-sxty-cu-03-04.bilivideo.com","cn-sxty-cu-03-05.bilivideo.com","cn-sxty-cu-03-06.bilivideo.com","cn-sxty-cu-03-07.bilivideo.com","cn-sxty-cu-03-08.bilivideo.com","cn-sxty-cu-03-09.bilivideo.com"],"广东":["cn-gddg-ccc-01-01.bilivideo.com","cn-gddg-cm-01-02.bilivideo.com","cn-gddg-cm-01-03.bilivideo.com","cn-gddg-cm-01-04.bilivideo.com","cn-gddg-cm-01-05.bilivideo.com","cn-gddg-cm-01-06.bilivideo.com","cn-gddg-cm-01-13.bilivideo.com","cn-gddg-cm-01-14.bilivideo.com","cn-gddg-cm-01-18.bilivideo.com","cn-gddg-ct-01-10.bilivideo.com","cn-gddg-ct-01-11.bilivideo.com","cn-gddg-ct-01-12.bilivideo.com","cn-gddg-ct-01-13.bilivideo.com","cn-gddg-ct-01-15.bilivideo.com","cn-gddg-ct-01-17.bilivideo.com","cn-gddg-ct-01-18.bilivideo.com","cn-gddg-ct-01-21.bilivideo.com","cn-gddg-ct-01-24.bilivideo.com","cn-gddg-cu-01-04.bilivideo.com","cn-gddg-cu-01-06.bilivideo.com","cn-gddg-cu-01-07.bilivideo.com","cn-gdfs-cc-02-02.bilivideo.com","cn-gdfs-cc-02-06.bilivideo.com","cn-gdfs-cc-02-07.bilivideo.com","cn-gdfs-cc-02-18.bilivideo.com","cn-gdfs-ct-01-01.bilivideo.com","cn-gdfs-ct-01-03.bilivideo.com","cn-gdfs-ct-01-04.bilivideo.com","cn-gdfs-ct-01-05.bilivideo.com","cn-gdfs-ct-01-06.bilivideo.com","cn-gdfs-ct-01-07.bilivideo.com","cn-gdfs-ct-01-08.bilivideo.com","cn-gdfs-ct-01-09.bilivideo.com","cn-gdfs-ct-01-10.bilivideo.com","cn-gdfs-ct-01-12.bilivideo.com","cn-gdfs-ct-01-13.bilivideo.com","cn-gdfs-ct-01-14.bilivideo.com","cn-gdfs-ct-01-16.bilivideo.com","cn-gdfs-ct-01-17.bilivideo.com","cn-gdfs-ct-01-18.bilivideo.com","cn-gdfs-ct-01-19.bilivideo.com","cn-gdfs-ct-01-21.bilivideo.com","cn-gdfs-ct-01-22.bilivideo.com","cn-gdgz-cm-01-02.bilivideo.com","cn-gdgz-cm-01-10.bilivideo.com","cn-gdgz-fx-01-01.bilivideo.com","cn-gdgz-fx-01-02.bilivideo.com","cn-gdgz-fx-01-03.bilivideo.com","cn-gdgz-fx-01-04.bilivideo.com","cn-gdgz-fx-01-05.bilivideo.com","cn-gdgz-fx-01-06.bilivideo.com","cn-gdgz-fx-01-07.bilivideo.com","cn-gdgz-fx-01-08.bilivideo.com","cn-gdgz-fx-01-09.bilivideo.com","cn-gdgz-fx-01-10.bilivideo.com","cn-gdgz-gd-01-01.bilivideo.com","cn-gdjm-cm-01-01.bilivideo.com","cn-gdjm-cm-01-02.bilivideo.com","cn-gdjm-cm-01-03.bilivideo.com","cn-gdjm-cm-01-04.bilivideo.com","cn-gdjm-cm-01-05.bilivideo.com","cn-gdjm-cm-01-06.bilivideo.com","cn-gdjm-cm-01-07.bilivideo.com","cn-gdjm-cm-01-08.bilivideo.com","cn-gdst-cm-01-01.bilivideo.com","cn-gdst-cm-01-02.bilivideo.com","cn-gdst-cm-01-03.bilivideo.com","cn-gdst-cm-01-04.bilivideo.com","cn-gdst-cm-01-05.bilivideo.com","cn-gdst-cm-01-06.bilivideo.com","cn-gdst-cm-01-07.bilivideo.com","cn-gdst-cm-01-10.bilivideo.com","cn-gdst-cm-01-12.bilivideo.com","cn-gdst-cm-01-15.bilivideo.com","cn-gdst-cm-01-17.bilivideo.com"],"新疆":["cn-xj-cm-02-01.bilivideo.com","cn-xj-cm-02-03.bilivideo.com","cn-xj-cm-02-04.bilivideo.com","cn-xj-cm-02-06.bilivideo.com","cn-xj-ct-01-01.bilivideo.com","cn-xj-ct-01-02.bilivideo.com","cn-xj-ct-01-03.bilivideo.com","cn-xj-ct-01-04.bilivideo.com","cn-xj-ct-01-05.bilivideo.com","cn-xj-ct-02-02.bilivideo.com"],"江苏":["cn-jsnj-fx-02-05.bilivideo.com","cn-jsnj-fx-02-07.bilivideo.com","cn-jsnj-fx-02-10.bilivideo.com","cn-jsnj-gd-01-02.bilivideo.com","cn-jssz-cm-02-07.bilivideo.com","cn-jssz-cm-02-08.bilivideo.com","cn-jssz-cm-02-18.bilivideo.com","cn-jssz-cm-02-20.bilivideo.com","cn-jssz-cm-02-25.bilivideo.com","cn-jssz-cm-02-31.bilivideo.com","cn-jssz-cm-02-34.bilivideo.com","cn-jssz-cm-02-35.bilivideo.com","cn-jssz-cm-02-40.bilivideo.com","cn-jssz-cm-02-42.bilivideo.com","ec-jssz-ct-01-02.bilivideo.com"],"江西":["cn-jxjj-ct-01-01.bilivideo.com","cn-jxjj-ct-01-02.bilivideo.com","cn-jxjj-ct-01-05.bilivideo.com","cn-jxjj-ct-01-14.bilivideo.com","cn-jxnc-cm-01-04.bilivideo.com","cn-jxnc-cm-01-09.bilivideo.com","cn-jxnc-cm-01-12.bilivideo.com","cn-jxnc-cm-01-19.bilivideo.com","cn-jxnc-cm-01-42.bilivideo.com","cn-jxnc-cmcc-bcache-06.bilivideo.com"],"河北":["cn-hblf-ct-01-06.bilivideo.com","cn-hblf-ct-01-19.bilivideo.com","cn-hbsjz-cm-02-01.bilivideo.com","cn-hbsjz-cm-02-02.bilivideo.com","cn-hbsjz-cm-02-03.bilivideo.com","cn-hbsjz-cm-02-04.bilivideo.com","cn-hbsjz-cm-02-05.bilivideo.com","cn-hbsjz-cm-02-07.bilivideo.com","cn-hbsjz-cm-02-08.bilivideo.com","cn-hbsjz-cm-02-09.bilivideo.com","cn-hbsjz-cm-02-10.bilivideo.com","cn-hbsjz-cm-02-11.bilivideo.com","cn-hbsjz-cm-02-12.bilivideo.com","cn-hbsjz-cm-02-13.bilivideo.com","cn-hbsjz-cm-02-14.bilivideo.com"],"河南":["cn-hnzz-cm-01-01.bilivideo.com","cn-hnzz-cm-01-02.bilivideo.com","cn-hnzz-cm-01-03.bilivideo.com","cn-hnzz-cm-01-04.bilivideo.com","cn-hnzz-cm-01-05.bilivideo.com","cn-hnzz-cm-01-06.bilivideo.com","cn-hnzz-cm-01-09.bilivideo.com","cn-hnzz-cm-01-10.bilivideo.com","cn-hnzz-cm-01-11.bilivideo.com","cn-hnzz-cm-01-13.bilivideo.com","cn-hnzz-cm-01-14.bilivideo.com","cn-hnzz-cm-01-15.bilivideo.com","cn-hnzz-cm-01-16.bilivideo.com","cn-hnzz-fx-01-01.bilivideo.com","cn-hnzz-fx-01-08.bilivideo.com"],"浙江":["cn-zjhz-cm-01-01.bilivideo.com","cn-zjhz-cm-01-04.bilivideo.com","cn-zjhz-cm-01-07.bilivideo.com","cn-zjhz-cm-01-08.bilivideo.com","cn-zjhz-cm-01-11.bilivideo.com","cn-zjhz-cm-01-12.bilivideo.com","cn-zjhz-cm-01-16.bilivideo.com","cn-zjhz-cm-01-17.bilivideo.com","cn-zjhz-cm-01-19.bilivideo.com","cn-zjhz-cm-01-28.bilivideo.com","cn-zjhz-cu-01-01.bilivideo.com","cn-zjhz-cu-01-02.bilivideo.com","cn-zjhz-cu-01-04.bilivideo.com","cn-zjhz-cu-01-05.bilivideo.com","cn-zjhz-cu-01-06.bilivideo.com","cn-zjhz-cu-v-02.bilivideo.com","cn-zjhz3-wasu-bcache-05.bilivideo.com","cn-zjhz3-wasu-bcache-11.bilivideo.com","cn-zjhz3-wasu-bcache-15.bilivideo.com","cn-zjhz3-wasu-bcache-20.bilivideo.com","cn-zjjh-ct-04-03.bilivideo.com","cn-zjjh-ct-04-06.bilivideo.com","cn-zjjh-ct-04-12.bilivideo.com","cn-zjjh-ct-04-13.bilivideo.com","cn-zjjh-ct-04-14.bilivideo.com","cn-zjjh-ct-04-15.bilivideo.com","cn-zjjh-ct-04-16.bilivideo.com","cn-zjjh-ct-04-24.bilivideo.com","cn-zjjh-ct-04-26.bilivideo.com","cn-zjjh-ct-04-27.bilivideo.com","cn-zjjh-ct-04-28.bilivideo.com","cn-zjjh-ct-04-29.bilivideo.com","cn-zjjh-ct-04-30.bilivideo.com","cn-zjjh-ct-04-33.bilivideo.com","cn-zjjh-ct-04-34.bilivideo.com"],"海外":["upos-hz-mirrorakam.akamaized.net","upos-sz-mirror08h.bilivideo.com","upos-sz-mirroraliov.bilivideo.com","upos-sz-mirrorcosov.bilivideo.com"],"深圳":["upos-sz-302kodo.bilivideo.com","upos-sz-302ppio.bilivideo.com","upos-sz-dynqn.bilivideo.com","upos-sz-estgcos.bilivideo.com","upos-sz-estghw.bilivideo.com","upos-sz-estgoss.bilivideo.com","upos-sz-mirror08c.bilivideo.com","upos-sz-mirror08ct.bilivideo.com","upos-sz-mirror08disp.bilivideo.com","upos-sz-mirrorali.bilivideo.com","upos-sz-mirroralib.bilivideo.com","upos-sz-mirroralibstar1.bilivideo.com","upos-sz-mirrorasiaov.bilivideo.com","upos-sz-mirrorawsov.bilivideo.com","upos-sz-mirrorbd.bilivideo.com","upos-sz-mirrorbdb.bilivideo.com","upos-sz-mirrorcf1ov.bilivideo.com","upos-sz-mirrorcos.bilivideo.com","upos-sz-mirrorcosb.bilivideo.com","upos-sz-mirrorcosbstar.bilivideo.com","upos-sz-mirrorcosdisp.bilivideo.com","upos-sz-mirrorcoso1.bilivideo.com","upos-sz-mirrorctos.bilivideo.com","upos-sz-mirrorhw.bilivideo.com","upos-sz-mirrorhwb.bilivideo.com","upos-sz-mirrorhwdisp.bilivideo.com","upos-sz-mirrorhwo1.bilivideo.com","upos-sz-mirrorzos.bilivideo.com","upos-sz-static.bilivideo.com","upos-sz-staticcos-cmask.bilivideo.com","upos-sz-staticcos.bilivideo.com"],"湖北":["cn-hbwh-cm-01-01.bilivideo.com","cn-hbwh-cm-01-02.bilivideo.com","cn-hbwh-cm-01-03.bilivideo.com","cn-hbwh-cm-01-04.bilivideo.com","cn-hbwh-cm-01-05.bilivideo.com","cn-hbwh-cm-01-06.bilivideo.com","cn-hbwh-cm-01-07.bilivideo.com","cn-hbwh-cm-01-08.bilivideo.com","cn-hbwh-cm-01-09.bilivideo.com","cn-hbwh-cm-01-10.bilivideo.com","cn-hbwh-cm-01-11.bilivideo.com","cn-hbwh-cm-01-12.bilivideo.com","cn-hbwh-cm-01-13.bilivideo.com","cn-hbwh-cm-01-14.bilivideo.com","cn-hbwh-cm-01-15.bilivideo.com","cn-hbwh-cm-01-16.bilivideo.com","cn-hbwh-cm-01-17.bilivideo.com","cn-hbwh-cm-01-18.bilivideo.com","cn-hbwh-cm-01-19.bilivideo.com","cn-hbwh-cm-01-20.bilivideo.com","cn-hbwh-fx-01-01.bilivideo.com","cn-hbwh-fx-01-02.bilivideo.com","cn-hbwh-fx-01-12.bilivideo.com","cn-hbwh-fx-01-13.bilivideo.com","cn-hbyc-ct-01-13.bilivideo.com","cn-hbyc-ct-02-02.bilivideo.com","cn-hbyc-ct-02-04.bilivideo.com","cn-hbyc-ct-02-06.bilivideo.com","cn-hbyc-ct-02-10.bilivideo.com","cn-hbyc-ct-02-11.bilivideo.com","cn-hbyc-ct-02-12.bilivideo.com","cn-hbyc-ct-02-19.bilivideo.com","cn-hbyc-ct-02-23.bilivideo.com"],"湖南":["cn-hncs-cm-03-01.bilivideo.com","cn-hncs-cm-03-04.bilivideo.com","cn-hncs-cm-03-05.bilivideo.com","cn-hncs-cm-03-08.bilivideo.com","cn-hncs-cm-03-09.bilivideo.com","cn-hncs-cm-03-11.bilivideo.com","cn-hncs-cm-03-12.bilivideo.com","cn-hncs-cu-01-01.bilivideo.com","cn-hncs-cu-01-02.bilivideo.com","cn-hncs-cu-01-03.bilivideo.com","cn-hncs-cu-01-04.bilivideo.com","cn-hncs-cu-01-05.bilivideo.com","cn-hncs-cu-01-06.bilivideo.com","cn-hncs-cu-01-07.bilivideo.com","cn-hncs-cu-01-09.bilivideo.com","cn-hncs-cu-01-10.bilivideo.com","cn-hncs-cu-v-01.bilivideo.com","cn-hncs-cu-v-03.bilivideo.com","cn-hncs-fx-01-01.bilivideo.com"],"福建":["cn-fjfz-fx-01-01.bilivideo.com","cn-fjfz-fx-01-02.bilivideo.com","cn-fjfz-fx-01-03.bilivideo.com","cn-fjfz-fx-01-04.bilivideo.com","cn-fjfz-fx-01-05.bilivideo.com","cn-fjfz-fx-01-06.bilivideo.com","cn-fjqz-cm-01-01.bilivideo.com","cn-fjqz-cm-01-02.bilivideo.com","cn-fjqz-cm-01-03.bilivideo.com","cn-fjqz-cm-01-04.bilivideo.com","cn-fjqz-cm-01-05.bilivideo.com","cn-fjqz-cm-01-06.bilivideo.com","cn-fjqz-cm-01-07.bilivideo.com","cn-fjqz-cm-01-08.bilivideo.com","cn-fjqz-cm-01-09.bilivideo.com"],"辽宁":["cn-lndl-ct-01-01.bilivideo.com","cn-lndl-ct-01-04.bilivideo.com","cn-lnsy-cm-01-01.bilivideo.com","cn-lnsy-cm-01-02.bilivideo.com","cn-lnsy-cm-01-03.bilivideo.com","cn-lnsy-cm-01-04.bilivideo.com","cn-lnsy-cm-01-05.bilivideo.com","cn-lnsy-cm-01-06.bilivideo.com","cn-lnsy-cm-01-07.bilivideo.com","cn-lnsy-cm-01-08.bilivideo.com","cn-lnsy-cm-01-09.bilivideo.com","cn-lnsy-cu-01-01.bilivideo.com","cn-lnsy-cu-01-03.bilivideo.com","cn-lnsy-cu-01-04.bilivideo.com","cn-lnsy-cu-01-06.bilivideo.com","cn-lnsy-cu-01-07.bilivideo.com"],"重庆":["cn-cq-cm-01-01.bilivideo.com","cn-cq-cm-01-02.bilivideo.com","cn-cq-cm-01-04.bilivideo.com","cn-cq-ct-01-05.bilivideo.com","cn-cq-ct-01-16.bilivideo.com","cn-cq-ct-01-20.bilivideo.com","cn-cq-ct-01-24.bilivideo.com"],"陕西":["cn-sxxa-cm-01-01.bilivideo.com","cn-sxxa-cm-01-02.bilivideo.com","cn-sxxa-cm-01-03.bilivideo.com","cn-sxxa-cm-01-04.bilivideo.com","cn-sxxa-cm-01-05.bilivideo.com","cn-sxxa-cm-01-06.bilivideo.com","cn-sxxa-cm-01-08.bilivideo.com","cn-sxxa-cm-01-09.bilivideo.com","cn-sxxa-cm-01-11.bilivideo.com","cn-sxxa-cm-01-12.bilivideo.com","cn-sxxa-ct-03-01.bilivideo.com","cn-sxxa-ct-03-02.bilivideo.com","cn-sxxa-ct-03-03.bilivideo.com","cn-sxxa-ct-03-04.bilivideo.com","cn-sxxa-cu-02-01.bilivideo.com","cn-sxxa-cu-02-02.bilivideo.com"],"香港":["cn-hk-eq-01-01.bilivideo.com","cn-hk-eq-01-03.bilivideo.com","cn-hk-eq-01-06.bilivideo.com","cn-hk-eq-01-07.bilivideo.com","cn-hk-eq-01-08.bilivideo.com","cn-hk-eq-01-09.bilivideo.com","cn-hk-eq-01-10.bilivideo.com","cn-hk-eq-01-11.bilivideo.com","cn-hk-eq-01-12.bilivideo.com","cn-hk-eq-01-13.bilivideo.com","cn-hk-eq-01-14.bilivideo.com","cn-hk-eq-bcache-13.bilivideo.com"],"黑省":["cn-hljheb-cm-01-01.bilivideo.com","cn-hljheb-cm-01-03.bilivideo.com","cn-hljheb-ct-01-02.bilivideo.com","cn-hljheb-ct-01-03.bilivideo.com","cn-hljheb-ct-01-04.bilivideo.com","cn-hljheb-ct-01-07.bilivideo.com"]};
     const autoSnapshotAt = "2026-10-17T22:01:33Z";
     const autoRegions = ["北京","上海","广东","深圳","福建","河北","黑省","河南","湖北","湖南","江苏","江西","辽宁","内蒙","山东","山西","陕西","四川","重庆","天津","新疆","浙江","外建","香港","海外"];
-    const autoCss = ":host{all:initial;--ground:#fff;--field:#eef2f2;--tag:#e1e6e7;--ink:#15191e;--muted:#4e5660;--faint:#6b727a;--accent:#c8372d;--head:#12343a;--head-ink:#f2efe8;--cap:#f1f2f3;color-scheme:light;font-family:\"Noto Sans SC\",\"Source Han Sans SC\",sans-serif;color:var(--ink)}\n:host([data-theme=dark]){--ground:#1f2124;--field:#2b2f33;--tag:#3a3f45;--ink:#ece9e3;--muted:#b0b6bd;--faint:#8f969e;--accent:#e0574a;--head:#0d2a2f;--cap:#26292d;color-scheme:dark}\n:host([hidden]){display:none}\n*{box-sizing:border-box}[hidden]{display:none!important}button,input,a{font:inherit;color:inherit}button{margin:0;padding:0;border:0;border-radius:0;background:none;cursor:pointer}\nbutton:focus-visible,a:focus-visible,input:focus-visible,.cand:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}\n.num{font-family:\"ZCOOL XiaoWei\",serif;font-weight:400;font-variant-numeric:tabular-nums}\n.cap{position:fixed;z-index:10001;display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;background:var(--cap);color:var(--faint);font-size:11px;line-height:1;white-space:nowrap}.cap svg{width:24px;height:10px;flex:none;overflow:visible}.cap .num{font-size:17px;color:var(--ink)}.cap em{font-style:normal;padding-left:6px}.cap em:empty{display:none}\n.track{fill:var(--faint);opacity:.35}.fill,.end{fill:var(--ink)}.start{fill:var(--cap);stroke:var(--ink);stroke-width:2}.alert .end{fill:var(--accent)}.miss .fill{fill:var(--faint)}.miss .end{fill:var(--cap);stroke:var(--faint);stroke-width:1.5;stroke-dasharray:2 1.5}\n.panel{position:fixed;z-index:10002;width:384px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden auto;overscroll-behavior:contain;background:var(--ground);color:var(--ink);box-shadow:0 22px 48px rgba(10,20,24,.22);font-size:13px}\n.hd{position:relative;height:112px;background:var(--head);color:var(--head-ink);overflow:hidden}.hd svg{position:absolute;inset:0;width:100%;height:100%}\n.road{fill:none;stroke:#f2efe8;stroke-opacity:.34;stroke-width:2;stroke-dasharray:3 5}.st{fill:rgba(242,239,232,.22)}.st.ok{fill:rgba(242,239,232,.62)}.st.pick{fill:#f2efe8}.st.sel{fill:var(--accent)}.horse{fill:#f2efe8;opacity:0;transition:opacity .2s}.riding .horse{opacity:1}\n.brand{position:absolute;left:20px;top:16px;right:52px}.brand strong{display:block;font:28px/1 \"ZCOOL XiaoWei\",serif;letter-spacing:.04em}.brand span{display:block;margin-top:9px;font-size:13px;line-height:18px}\n.x{position:absolute;right:10px;top:10px;width:32px;height:32px;color:rgba(242,239,232,.8);font:20px/32px Arial,sans-serif}.x:hover{color:#f2efe8}\n.route{position:relative;padding:6px 0 4px}.route>i{position:absolute;font-style:normal;pointer-events:none}\n.line{left:26px;top:0;width:3px;background:var(--ink);transform-origin:top;z-index:1}.trail{left:26px;width:3px;background:var(--accent);transform-origin:top;transform:scaleY(0);z-index:2}.hl{left:0;right:0;background:var(--field);z-index:0}\n.mark{left:19px;top:0;width:17px;height:17px;background:var(--accent);z-index:3}.rider{left:21px;top:0;width:13px;height:13px;background:var(--accent);z-index:3;opacity:0}\n.seal{left:10px;top:0;width:36px;height:36px;display:grid;place-items:center;background:var(--accent);color:#fff;font:22px/1 \"ZCOOL XiaoWei\",serif;z-index:4;opacity:0}.ring{left:10px;top:0;width:36px;height:36px;box-shadow:inset 0 0 0 3px var(--accent);z-index:4;opacity:0}\n.stop{position:relative;z-index:1;display:flex;align-items:center;gap:12px;min-height:66px;padding:10px 20px 10px 52px}.cand{cursor:pointer}.cand input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}\n.dot{position:absolute;left:21px;top:50%;width:13px;height:13px;margin-top:-6.5px;background:var(--ink)}.cur .dot{background:var(--ground);box-shadow:inset 0 0 0 3px var(--ink)}\n.txt{flex:1;min-width:0}.txt strong{display:block;font-size:15px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.meta{display:flex;align-items:center;gap:8px;margin-top:3px;font-size:12px;color:var(--muted);white-space:nowrap}.cur .meta{align-items:baseline}.cur .info{white-space:normal}\n.chip{font-style:normal;padding:2px 8px;line-height:16px;background:var(--tag);color:var(--ink);font-size:11px}.cur .chip{background:var(--ink);color:var(--ground)}\n.fig{text-align:right;white-space:nowrap}.fig .num{display:block;font-size:30px;line-height:32px}.cur .fig .num{color:var(--muted)}.fig small{font:12px \"Noto Sans SC\",sans-serif;color:var(--faint);margin-left:4px}.gain{display:block;font-size:12px;color:var(--muted);margin-top:2px}\n.gap{position:relative;z-index:1;padding:8px 20px 6px 52px;font-size:12px;color:var(--muted)}.gap b{font-weight:500;color:var(--ink)}\n.go{position:relative;display:block;width:calc(100% - 40px);height:46px;margin:14px 20px 0;background:var(--ink);color:var(--ground);font-size:15px;font-weight:500;overflow:hidden}.go b{display:inline-block}\n.ft{display:flex;gap:4px;padding:8px 12px 12px}.ft button{height:36px;padding:0 8px;color:var(--muted);font-size:13px}.ft button:hover,.ft [aria-expanded=true]{color:var(--ink)}.cfg{margin-left:auto}\n.set{margin:0 12px 12px;padding:4px 12px 12px;background:var(--field)}.set label{display:flex;align-items:center;gap:8px;min-height:36px;font-size:13px}.set label:has(:disabled){color:var(--faint)}.set label>input{margin-left:auto}.set small{font-size:11px;color:var(--faint)}\n.set input[type=checkbox]{width:16px;height:16px;accent-color:var(--ink)}.set input[type=number]{width:84px;height:28px;padding:0 8px;border:0;border-radius:0;background:var(--ground);color:var(--ink);font:16px \"ZCOOL XiaoWei\",serif;text-align:right}\n.links{display:flex;align-items:center;gap:14px;margin-top:8px;font-size:12px}.links a{color:var(--muted);text-decoration:none}.links a:hover{color:var(--ink)}.links button{margin-left:auto;height:32px;padding:0 14px;box-shadow:inset 0 0 0 1.5px var(--ink);font-size:13px}\n";
+    const autoCss = ":host{all:initial;--ground:#fff;--field:#e6ecec;--tag:#e1e6e7;--ink:#15191e;--muted:#4e5660;--faint:#646b73;--accent:#c8372d;--head:#12343a;--head-ink:#f2efe8;--cap:#f1f2f3;--hover:rgba(18,52,58,.045);color-scheme:light;font-family:\"Noto Sans SC\",\"Source Han Sans SC\",sans-serif;color:var(--ink)}\n:host([data-theme=dark]){--ground:#1f2124;--field:#31373c;--tag:#3a3f45;--ink:#ece9e3;--muted:#b0b6bd;--faint:#9aa1a9;--accent:#e0574a;--head:#0d2a2f;--cap:#26292d;--hover:rgba(255,255,255,.05);color-scheme:dark}\n:host([hidden]){display:none}\n*{box-sizing:border-box}[hidden]{display:none!important}button,input,a{font:inherit;color:inherit}button{margin:0;padding:0;border:0;border-radius:0;background:none;cursor:pointer}\nbutton:focus-visible,a:focus-visible,input:focus-visible,.cand:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}.hd button:focus-visible{outline-color:#f2efe8}\n.num{font-family:\"ZCOOL XiaoWei\",serif;font-weight:400}\n.cap{position:fixed;z-index:10001;display:flex;align-items:baseline;gap:6px;height:28px;padding:0 12px;overflow:hidden;background:var(--cap);color:var(--faint);font-size:12px;line-height:28px;white-space:nowrap}.cap svg{align-self:center;width:24px;height:10px;margin-right:2px;flex:none;overflow:visible}.cap .num{font:500 15px \"Noto Sans SC\",sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)}.cap em{font-style:normal;padding-left:4px;font-variant-numeric:tabular-nums}.cap em:empty{display:none}.cap.alert em,.cap.after em{color:var(--ink);font-weight:500}\n.track{fill:var(--faint);opacity:.35}.fill,.end{fill:var(--ink)}.end{transition:fill .15s}.start{fill:var(--cap);stroke:var(--ink);stroke-width:2}.alert .end{fill:var(--accent)}.miss .fill{fill:var(--faint)}.miss .end{fill:var(--cap);stroke:var(--faint);stroke-width:1.5;stroke-dasharray:2 1.5}\n.panel{position:fixed;z-index:10002;width:384px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:hidden auto;overscroll-behavior:contain;background:var(--ground);color:var(--ink);box-shadow:0 22px 48px rgba(10,20,24,.22);font-size:13px}\n.hd{position:relative;height:112px;background:var(--head);color:var(--head-ink);overflow:hidden}.hd svg{position:absolute;inset:0;width:100%;height:100%}\n.road{fill:none;stroke:#f2efe8;stroke-opacity:.34;stroke-width:2;stroke-dasharray:3 5}.st{fill:rgba(242,239,232,.22)}.st.ok{fill:rgba(242,239,232,.62)}.st.pick{fill:#f2efe8}.st.sel{fill:var(--accent);stroke:#f2efe8;stroke-width:1.5}.horse{fill:#f2efe8;stroke:var(--head);stroke-width:1.5;opacity:0;transition:opacity .2s}.riding .horse{opacity:1}\n.brand{position:absolute;left:20px;top:16px;right:52px}.brand strong{display:block;font:28px/1 \"ZCOOL XiaoWei\",serif;letter-spacing:.04em}.brand span{display:block;margin-top:9px;font-size:13px;line-height:18px}\n.x{position:absolute;right:12px;top:14px;width:32px;height:32px;color:rgba(242,239,232,.8);font:22px/32px \"Noto Sans SC\",sans-serif}.x:hover{color:#f2efe8}\n.route{position:relative;padding:6px 0 4px}.route>i{position:absolute;font-style:normal;pointer-events:none}\n.line{left:26px;top:0;width:3px;background:var(--ink);transform-origin:top;z-index:1}.trail{left:26px;width:3px;background:var(--accent);transform-origin:top;transform:scaleY(0);z-index:2}.hl{left:0;right:0;background:var(--field);z-index:0}\n.mark{left:19px;top:0;width:17px;height:17px;background:var(--accent);z-index:3}.rider{left:21px;top:0;width:13px;height:13px;background:var(--accent);z-index:3;opacity:0}\n.seal{left:10px;top:0;width:36px;height:36px;display:grid;place-items:center;background:#c8372d;color:#fff;font:22px/1 \"ZCOOL XiaoWei\",serif;z-index:4;opacity:0}.ring{left:10px;top:0;width:36px;height:36px;box-shadow:inset 0 0 0 3px var(--accent);z-index:4;opacity:0}\n.stop{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:2px;align-items:baseline;padding:10px 20px 10px 52px}.cand{cursor:pointer}.cand:hover{background:var(--hover)}.cand input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}.cand:has(input:checked) .chip{background:var(--ground)}\n.dot{position:absolute;left:21px;top:0;width:13px;height:13px;background:var(--ink)}.cur .dot{background:var(--ground);box-shadow:inset 0 0 0 3px var(--ink)}\n.txt,.fig{display:contents}.txt strong{grid-area:1/1;font-size:15px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.meta{grid-area:2/1;display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap}.cur .info{white-space:normal}\n.chip{font-style:normal;padding:1px 8px;line-height:16px;background:var(--tag);color:var(--ink);font-size:12px}.cur .chip{background:var(--ink);color:var(--ground)}\n.fig .num{grid-area:1/2;display:grid;grid-template-columns:auto 26px 32px;align-items:baseline;font-size:30px;line-height:30px;white-space:nowrap}.cur .fig .num{color:var(--muted)}.int{text-align:right}.dec{text-align:left}.u{font:12px \"Noto Sans SC\",sans-serif;color:var(--faint);text-align:right}.gain{grid-area:2/2;font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}\n.gap{position:relative;z-index:1;padding:8px 20px 6px 52px;font-size:12px;color:var(--muted)}.gap b{font-weight:500;color:var(--ink)}\n.go{position:relative;display:block;width:calc(100% - 40px);height:46px;margin:14px 20px 0;background:var(--ink);color:var(--ground);font-size:15px;font-weight:500;overflow:hidden}.go b{display:inline-block}\n.note{margin:8px 20px 0;font-size:12px;line-height:18px;color:var(--muted);font-variant-numeric:tabular-nums}\n.ft{display:flex;gap:4px;padding:8px 12px 12px}.ft button{height:36px;padding:0 8px;color:var(--muted);font-size:13px}.ft button:hover,.ft [aria-expanded=true]{color:var(--ink)}.cfg{margin-left:auto}\n.set{margin:0 8px 12px;padding:4px 12px 12px;background:var(--field)}.set label{display:flex;align-items:center;gap:8px;min-height:36px;font-size:13px}.set label:has(:disabled){color:var(--faint)}.set label>input{margin:0 0 0 auto}.set small{font-size:12px;color:var(--faint)}\n.set input[type=checkbox]{width:16px;height:16px;accent-color:var(--ink)}.set input[type=number]{width:84px;height:28px;padding:0 8px;border:0;border-radius:0;background:var(--ground);color:var(--ink);font:14px \"Noto Sans SC\",sans-serif;font-variant-numeric:tabular-nums;text-align:right}\n.links{display:flex;align-items:center;gap:14px;margin-top:8px;font-size:12px}.links a{color:var(--muted);text-decoration:none}.links a:hover{color:var(--ink)}.links button{margin-left:auto;height:32px;padding:0 14px;box-shadow:inset 0 0 0 1.5px var(--ink);font-size:13px}\n";
     const autoRawXHR = unsafeWindow.XMLHttpRequest;
     const autoRawFetch = unsafeWindow.fetch.bind(unsafeWindow);
     const autoMetricsToken = 'ccb-auto-' + Math.random().toString(36).slice(2);
